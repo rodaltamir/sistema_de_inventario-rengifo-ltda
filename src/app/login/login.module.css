@@ -1,0 +1,179 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: url('/giammarco-boscaro-zeH-ljawHtg-unsplash.jpg') no-repeat center center fixed;
+  background-size: cover;
+  padding: 1rem;
+}
+
+.loginCard {
+  background: rgba(255, 255, 255, 1);
+  padding: 3rem;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 450px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.12);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.loginCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.12);
+}
+
+.logoSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.mainLogo {
+  width: 100%;
+  max-width: 350px;
+  height: auto;
+  object-fit: contain;
+  margin-bottom: 1.5rem;
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inputGroup label {
+  font-weight: 500;
+  color: var(--color-text-main);
+  font-size: 0.95rem;
+}
+
+.inputGroup input {
+  padding: 0.85rem 1.2rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.9);
+  transition: all 0.2s ease;
+  font-size: 1rem;
+}
+
+.inputGroup input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px var(--color-primary-light);
+  background: #fff;
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: 0.9rem;
+  text-align: center;
+  background: #fff0f0;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #ffcdd2;
+  font-weight: 500;
+}
+
+.submitBtn {
+  margin-top: 0.5rem;
+  padding: 0.85rem;
+  font-size: 1.1rem;
+  border-radius: 10px;
+  font-weight: 600;
+  background: linear-gradient(45deg, var(--color-primary), #ff9a44);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 122, 0, 0.3);
+}
+
+.submitBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 122, 0, 0.4);
+}
+
+.submitBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.passwordWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.passwordWrapper input {
+  width: 100%;
+  padding-right: 2.5rem;
+}
+
+.eyeButton {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--color-text-light);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.eyeButton:hover {
+  color: var(--color-primary);
+}
+
+.strengthMeter {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  height: 4px;
+  border-radius: 2px;
+  background-color: #e2e8f0;
+  overflow: hidden;
+}
+
+.strengthBar {
+  height: 100%;
+  transition: all 0.3s ease;
+}
+
+.validationRules {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-light);
+}
+
+.ruleItem {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ruleMet {
+  color: #22c55e;
+}

@@ -1,0 +1,106 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("TENANT_DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/tenant"
+}
+
+model Proveedor {
+  id            String   @id @default(uuid())
+  nombre        String
+  nit           String
+  responsable   String?
+  telefono      String?
+  logo          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  productos     Producto[]
+}
+
+model Categoria {
+  id        String     @id @default(uuid())
+  nombre    String
+  tenantId  String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  productos Producto[]
+}
+
+model Producto {
+  codigo           String   @id
+  proveedorId      String?
+  nombre           String   @default("Sin nombre")
+  descripcion      String
+  marca            String
+  unidadMedida     String   @default("Unidad")
+  stock            Int      @default(0)
+  costo            Float
+  precioVenta      Float
+  metodoInventario String   @default("PEPS")
+  activo           Boolean  @default(true)
+  categoriaId      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  proveedor        Proveedor? @relation(fields: [proveedorId], references: [id])
+  categoria        Categoria? @relation(fields: [categoriaId], references: [id])
+  detalles         DetalleTransaccion[]
+}
+
+model Transaccion {
+  id              String   @id @default(uuid())
+  tipoTransaccion String   // COMPRA | VENTA
+  nroDocumento    String
+  fecha           DateTime @default(now())
+  nitCi           String
+  razonSocial     String
+  formaPago       String   @default("EFECTIVO")
+  descuento       Float    @default(0)
+  observaciones   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  detalles        DetalleTransaccion[]
+  pagos           Pago[]
+  deudaCredito    DeudaCredito?
+}
+
+model DetalleTransaccion {
+  id             String      @id @default(uuid())
+  transaccionId  String
+  productoCodigo String
+  cantidad       Int
+  precioUnitario Float
+  subtotal       Float
+
+  transaccion    Transaccion @relation(fields: [transaccionId], references: [id])
+  producto       Producto    @relation(fields: [productoCodigo], references: [codigo])
+}
+
+model Pago {
+  id            String      @id @default(uuid())
+  transaccionId String
+  monto         Float
+  fecha         DateTime    @default(now())
+  observaciones String?
+
+  transaccion   Transaccion @relation(fields: [transaccionId], references: [id])
+}
+
+model DeudaCredito {
+  id            String      @id @default(uuid())
+  transaccionId String      @unique
+  montoTotal    Float
+  saldoPendiente Float
+  estado        String      @default("PENDIENTE") // PENDIENTE | PAGADO
+  fechaVencimiento DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  transaccion   Transaccion @relation(fields: [transaccionId], references: [id])
+}
