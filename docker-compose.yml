@@ -6,9 +6,9 @@ services:
     container_name: inventario_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: inventario_master
+      POSTGRES_USER: admin_inventario
+      POSTGRES_PASSWORD: "SecureDB_Inv_2026!#"
+      POSTGRES_DB: inventario_master_db
     ports:
       - "5432:5432"
     volumes:
@@ -23,8 +23,8 @@ services:
     ports:
       - "80:3000" # Mapea el puerto 80 del servidor al 3000 del contenedor
     environment:
-      - DATABASE_URL=postgresql://postgres:admin@db:5432/inventario_master?schema=public
-      - NEXTAUTH_SECRET=mi-secreto-para-produccion-muy-seguro-123
+      - DATABASE_URL=postgresql://admin_inventario:SecureDB_Inv_2026!%23@db:5432/inventario_master_db?schema=public
+      - NEXTAUTH_SECRET=b7d38392f9e42b6a1c8f0e5d4a9b2c7e8f1d3a6c9e0b4f5a
       # IMPORTANTE: Cambiar localhost por la IP o Dominio de tu servidor en producción
       - NEXTAUTH_URL=http://localhost 
     depends_on:
