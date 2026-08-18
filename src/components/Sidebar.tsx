@@ -25,7 +25,7 @@ export default function Sidebar() {
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Transacciones", href: "/transacciones", icon: ArrowLeftRight },
     { name: "Productos", href: "/productos", icon: Package },
-    { name: "Proveedores", href: "/proveedores", icon: Building2 },
+    { name: "Contactos", href: "/proveedores", icon: Users },
     { name: "Kardex", href: '/kardex', icon: FileText },
     { name: 'Créditos/Deudas', href: '/creditos-deudas', icon: CreditCard },
     { name: 'Historial', href: '/historial', icon: Clock },

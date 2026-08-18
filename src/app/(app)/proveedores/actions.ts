@@ -11,6 +11,7 @@ export async function createProveedor(data: {
   responsable?: string;
   telefono?: string;
   logo?: string;
+  tipo?: string;
 }) {
   const session = await getServerSession(authOptions);
   
@@ -26,7 +27,7 @@ export async function createProveedor(data: {
   });
 
   if (exists) {
-    throw new Error("Ya existe un proveedor con ese NIT");
+    throw new Error(`Ya existe un ${exists.tipo === 'CLIENTE' ? 'cliente' : 'proveedor'} con ese NIT`);
   }
 
   const newProveedor = await tenantPrisma.proveedor.create({
@@ -36,6 +37,7 @@ export async function createProveedor(data: {
       responsable: data.responsable || null,
       telefono: data.telefono || null,
       logo: data.logo || null,
+      tipo: data.tipo || 'PROVEEDOR'
     }
   });
 
@@ -57,7 +59,7 @@ export async function updateProveedor(id: string, data: any) {
     }
   });
 
-  if (exists) throw new Error("Ya existe otro proveedor con ese NIT");
+  if (exists) throw new Error(`Ya existe otro ${exists.tipo === 'CLIENTE' ? 'cliente' : 'proveedor'} con ese NIT`);
 
   const updated = await tenantPrisma.proveedor.update({
     where: { id },
@@ -67,6 +69,7 @@ export async function updateProveedor(id: string, data: any) {
       responsable: data.responsable || null,
       telefono: data.telefono || null,
       logo: data.logo || null,
+      tipo: data.tipo || 'PROVEEDOR'
     }
   });
 

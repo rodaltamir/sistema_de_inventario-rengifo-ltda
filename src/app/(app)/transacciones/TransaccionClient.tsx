@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ShoppingCart, Download, FileText, Plus, Trash2 } from "lucide-react";
+import { ShoppingCart, Download, FileText, Plus, Trash2, Calculator } from "lucide-react";
 import { procesarTransaccion } from "./actions";
+import { createProveedor } from "../proveedores/actions";
 import Swal from 'sweetalert2';
 import styles from "./transacciones.module.css";
 
@@ -38,18 +39,6 @@ export default function TransaccionClient({
   const subtotalNeto = detalles.reduce((acc, curr) => acc + ((Number(curr.cantidad) || 0) * (Number(curr.precioUnitario) || 0)), 0);
   const totalGeneral = subtotalNeto - (Number(descuento) || 0);
 
-  const handleProveedorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const provId = e.target.value;
-    const prov = proveedores.find(p => p.id === provId);
-    if (prov) {
-      setRazonSocial(prov.nombre);
-      setNitCi(prov.nit);
-    } else {
-      setRazonSocial("");
-      setNitCi("");
-    }
-  };
-
   const handleSinFacturaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const checked = e.target.checked;
     setSinFactura(checked);
@@ -60,6 +49,26 @@ export default function TransaccionClient({
       setNitCi("");
       setRazonSocial("");
     }
+  };
+
+  const handleNitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setNitCi(val);
+    if (sinFactura) return;
+    
+    // Autocompletado si encuentra
+    const match = proveedores.find(p => p.nit === val && p.tipo === (modo === 'VENTA' ? 'CLIENTE' : 'PROVEEDOR'));
+    if (match) setRazonSocial(match.nombre);
+  };
+
+  const handleRazonSocialChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setRazonSocial(val);
+    if (sinFactura) return;
+
+    // Autocompletado si encuentra
+    const match = proveedores.find(p => p.nombre.toLowerCase() === val.toLowerCase() && p.tipo === (modo === 'VENTA' ? 'CLIENTE' : 'PROVEEDOR'));
+    if (match) setNitCi(match.nit);
   };
 
   const agregarFila = () => {
@@ -89,6 +98,122 @@ export default function TransaccionClient({
     }));
   };
 
+  const resetForm = () => {
+    setNroDocumento("");
+    setDetalles([{ id: Date.now(), productoCodigo: "", cantidad: 1, precioUnitario: 0 }]);
+    setDescuento("");
+    setAbonoInicial("");
+    setSinFactura(false);
+    setNitCi("");
+    setRazonSocial("");
+    setObservaciones("");
+  };
+
+  const preguntarGuardarContacto = async () => {
+    if (sinFactura || !nitCi || !razonSocial || nitCi === "0" || razonSocial === "S/N") return;
+
+    // Ver si ya existe
+    const exists = proveedores.some(p => p.nit === nitCi);
+    if (exists) return; // Si ya existe, no preguntamos
+
+    const tipoContacto = modo === "VENTA" ? "Cliente" : "Proveedor";
+    const result = await Swal.fire({
+      title: `¿Guardar ${tipoContacto}?`,
+      text: `El ${tipoContacto.toLowerCase()} "${razonSocial}" (NIT: ${nitCi}) no está guardado. ¿Desea guardarlo para futuras transacciones?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, guardar',
+      cancelButtonText: 'No, gracias'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await createProveedor({
+          nombre: razonSocial,
+          nit: nitCi,
+          tipo: modo === "VENTA" ? "CLIENTE" : "PROVEEDOR",
+          logo: modo === "VENTA" ? "user" : "truck"
+        });
+        Swal.fire('Guardado', `${tipoContacto} guardado con éxito.`, 'success');
+        // NOTA: Para que el nuevo cliente aparezca instantáneamente en la lista actual 
+        // sin recargar, tendríamos que actualizar el estado 'proveedores', pero como 
+        // viene por props en este caso simple haremos un reload o dejaremos que 
+        // la navegación futura lo recargue.
+      } catch (e: any) {
+        Swal.fire('Error', `No se pudo guardar el ${tipoContacto.toLowerCase()}: ${e.message}`, 'error');
+      }
+    }
+  };
+
+  const calcularDIM = async (detalleId: number) => {
+    const { value: formValues } = await Swal.fire({
+      title: '<strong>Calcular DIM</strong>',
+      html: `
+        <div style="text-align: left; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 15px;">
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; text-transform: uppercase;">Importe Total a Pagar</label>
+            <div style="position: relative;">
+              <span style="position: absolute; left: 12px; top: 11px; color: #f97316; font-weight: bold;">Bs.</span>
+              <input id="swal-importe" type="number" step="0.01" placeholder="Ej. 1000" style="width: 100%; padding: 12px 12px 12px 40px; box-sizing: border-box; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; color: #1e293b; outline: none; transition: all 0.2s;" onfocus="this.style.borderColor='#f97316'; this.style.boxShadow='0 0 0 3px rgba(249, 115, 22, 0.1)';" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none';">
+            </div>
+          </div>
+          
+          <div>
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; text-transform: uppercase;">Cantidad / Stock a Ingresar</label>
+            <div style="position: relative;">
+              <span style="position: absolute; left: 12px; top: 11px; color: #f97316;">📦</span>
+              <input id="swal-cantidad" type="number" step="1" placeholder="Ej. 50" style="width: 100%; padding: 12px 12px 12px 40px; box-sizing: border-box; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; color: #1e293b; outline: none; transition: all 0.2s;" onfocus="this.style.borderColor='#f97316'; this.style.boxShadow='0 0 0 3px rgba(249, 115, 22, 0.1)';" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none';">
+            </div>
+          </div>
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonColor: '#f97316',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: '✔ Aplicar Cálculo',
+      cancelButtonText: 'Cancelar',
+      preConfirm: () => {
+        const importe = (document.getElementById('swal-importe') as HTMLInputElement).value;
+        const cantidad = (document.getElementById('swal-cantidad') as HTMLInputElement).value;
+        if (!importe || !cantidad || Number(cantidad) <= 0) {
+          Swal.showValidationMessage('Debe ingresar un importe válido y una cantidad mayor a cero');
+          return false;
+        }
+        return { importe: Number(importe), cantidad: Number(cantidad) };
+      }
+    });
+
+    if (formValues) {
+      const { importe, cantidad } = formValues;
+      // Lógica solicitada: importe dividido entre 0.13, luego dividido entre cantidad
+      const intermedio = importe / 0.13;
+      const precioUnitario = intermedio / cantidad;
+
+      // Actualizar la fila correspondiente
+      setDetalles(prev => prev.map(d => {
+        if (d.id === detalleId) {
+          return { ...d, cantidad: cantidad, precioUnitario: precioUnitario.toFixed(2) };
+        }
+        return d;
+      }));
+
+      Swal.fire({
+        title: '¡DIM Aplicado!',
+        html: `
+          <div style="font-size: 1rem; color: #475569; margin-top: 10px;">
+            <p>Se actualizó la fila con:</p>
+            <p><strong>Cantidad:</strong> ${cantidad} unidades</p>
+            <p><strong>Precio Unitario:</strong> <span style="color: #f97316; font-size: 1.2rem; font-weight: bold;">Bs. ${precioUnitario.toFixed(2)}</span></p>
+          </div>
+        `,
+        icon: 'success',
+        timer: 3000,
+        showConfirmButton: false
+      });
+    }
+  };
+
   const handleSubmit = async () => {
     if (!nroDocumento) return Swal.fire('Error', "El número de documento es requerido.", 'warning');
     if (!razonSocial || !nitCi) return Swal.fire('Error', "NIT y Razón Social son requeridos.", 'warning');
@@ -109,7 +234,6 @@ export default function TransaccionClient({
       }
     }
 
-    // UI State for rendering is removed, we'll use Swal directly
     setLoading(true);
     try {
       await procesarTransaccion({
@@ -130,23 +254,22 @@ export default function TransaccionClient({
         }))
       });
 
-      Swal.fire('¡Éxito!', '¡Transacción procesada con éxito! El stock ha sido actualizado.', 'success');
+      await Swal.fire('¡Éxito!', '¡Transacción procesada con éxito! El stock ha sido actualizado.', 'success');
       
+      // Preguntar si quiere guardar cliente/proveedor
+      await preguntarGuardarContacto();
+
       // Reset form
-      setNroDocumento("");
-      setDetalles([{ id: Date.now(), productoCodigo: "", cantidad: 1, precioUnitario: 0 }]);
-      setDescuento("");
-      setAbonoInicial("");
-      setSinFactura(false);
-      setNitCi("");
-      setRazonSocial("");
-      setObservaciones("");
+      resetForm();
     } catch (err: any) {
       Swal.fire('Error', err.message || "Error al procesar la transacción.", 'error');
     } finally {
       setLoading(false);
     }
   };
+
+  const clientesList = proveedores.filter(p => p.tipo === 'CLIENTE');
+  const proveedoresList = proveedores.filter(p => p.tipo === 'PROVEEDOR');
 
   return (
     <>
@@ -181,12 +304,10 @@ export default function TransaccionClient({
               <FileText size={18} /> Datos de Factura / {modo === "VENTA" ? "Venta" : "Compra"}
             </div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              {modo === "VENTA" && (
-                <label style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input type="checkbox" checked={sinFactura} onChange={handleSinFacturaChange} />
-                  Sin factura
-                </label>
-              )}
+              <label style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input type="checkbox" checked={sinFactura} onChange={handleSinFacturaChange} />
+                Sin factura / Sin nombre
+              </label>
               <span style={{ 
                 border: `1px solid ${modo === 'VENTA' ? 'var(--color-primary)' : '#3b82f6'}`,
                 color: modo === 'VENTA' ? 'var(--color-primary)' : '#3b82f6',
@@ -202,7 +323,7 @@ export default function TransaccionClient({
           <div className={styles.sectionBody}>
             <div className={styles.formGrid}>
               <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Número de Factura</label>
+                <label className={styles.formLabel}>Número de Factura / Doc.</label>
                 <input type="text" className={styles.formInput} value={nroDocumento} onChange={e => setNroDocumento(e.target.value)} placeholder="DOC-128232" />
               </div>
               <div className={styles.formGroup}>
@@ -210,30 +331,42 @@ export default function TransaccionClient({
                 <input type="date" className={styles.formInput} value={fecha} onChange={e => setFecha(e.target.value)} />
               </div>
               
-              {modo === "VENTA" ? (
-                <>
-                  <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>NIT / CI</label>
-                    <input type="text" className={styles.formInput} value={nitCi} onChange={e => setNitCi(e.target.value)} disabled={sinFactura} placeholder="Ej: 1234567" />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>Nombre / Razón Social</label>
-                    <input type="text" className={styles.formInput} value={razonSocial} onChange={e => setRazonSocial(e.target.value)} disabled={sinFactura} placeholder="Ej: Juan Perez" />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>Proveedor</label>
-                    <select className={styles.formSelect} onChange={handleProveedorChange} defaultValue="">
-                      <option value="" disabled>Seleccione un proveedor</option>
-                      {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>NIT / CI del {modo === "VENTA" ? "Cliente" : "Proveedor"}</label>
+                <input 
+                  type="text" 
+                  className={styles.formInput} 
+                  value={nitCi} 
+                  onChange={handleNitChange} 
+                  disabled={sinFactura} 
+                  placeholder="Ej: 1234567" 
+                  list="nits-list"
+                />
+                <datalist id="nits-list">
+                  {(modo === 'VENTA' ? clientesList : proveedoresList).map(c => (
+                    <option key={c.id} value={c.nit}>{c.nombre}</option>
+                  ))}
+                </datalist>
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Nombre / Razón Social</label>
+                <input 
+                  type="text" 
+                  className={styles.formInput} 
+                  value={razonSocial} 
+                  onChange={handleRazonSocialChange} 
+                  disabled={sinFactura} 
+                  placeholder="Ej: Juan Perez" 
+                  list="nombres-list"
+                />
+                <datalist id="nombres-list">
+                  {(modo === 'VENTA' ? clientesList : proveedoresList).map(c => (
+                    <option key={c.id} value={c.nombre}>{c.nit}</option>
+                  ))}
+                </datalist>
+              </div>
+
             </div>
-            
           </div>
         </div>
 
@@ -289,8 +422,34 @@ export default function TransaccionClient({
                         onChange={(e) => updateDetalle(d.id, "precioUnitario", e.target.value)}
                         step="0.01"
                         min="0"
-                        disabled={modo === "VENTA"}
                       />
+                      {modo === "COMPRA" && (
+                        <button
+                          type="button"
+                          onClick={() => calcularDIM(d.id)}
+                          style={{
+                            marginTop: '0.5rem',
+                            padding: '0.35rem 0.5rem',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.3rem',
+                            background: '#fff7ed',
+                            color: '#ea580c',
+                            border: '1px solid #fed7aa',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.background = '#ffedd5'; e.currentTarget.style.borderColor = '#fdba74'; }}
+                          onMouseOut={(e) => { e.currentTarget.style.background = '#fff7ed'; e.currentTarget.style.borderColor = '#fed7aa'; }}
+                        >
+                          <Calculator size={14} /> Calcular DIM
+                        </button>
+                      )}
                     </td>
                     <td style={{ fontWeight: 600 }}>
                       {((Number(d.cantidad) || 0) * (Number(d.precioUnitario) || 0)).toFixed(2)}
@@ -379,7 +538,7 @@ export default function TransaccionClient({
                   cancelButtonText: 'Cancelar'
                 }).then((result) => {
                   if (result.isConfirmed) {
-                    window.location.reload();
+                    resetForm();
                   }
                 });
               }}

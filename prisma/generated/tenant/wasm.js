@@ -129,6 +129,7 @@ exports.Prisma.ProveedorScalarFieldEnum = {
   responsable: 'responsable',
   telefono: 'telefono',
   logo: 'logo',
+  tipo: 'tipo',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };

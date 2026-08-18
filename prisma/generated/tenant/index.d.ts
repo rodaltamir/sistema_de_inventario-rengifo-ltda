@@ -1508,6 +1508,7 @@ export namespace Prisma {
     responsable: string | null
     telefono: string | null
     logo: string | null
+    tipo: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -1519,6 +1520,7 @@ export namespace Prisma {
     responsable: string | null
     telefono: string | null
     logo: string | null
+    tipo: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -1530,6 +1532,7 @@ export namespace Prisma {
     responsable: number
     telefono: number
     logo: number
+    tipo: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -1543,6 +1546,7 @@ export namespace Prisma {
     responsable?: true
     telefono?: true
     logo?: true
+    tipo?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -1554,6 +1558,7 @@ export namespace Prisma {
     responsable?: true
     telefono?: true
     logo?: true
+    tipo?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -1565,6 +1570,7 @@ export namespace Prisma {
     responsable?: true
     telefono?: true
     logo?: true
+    tipo?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -1649,6 +1655,7 @@ export namespace Prisma {
     responsable: string | null
     telefono: string | null
     logo: string | null
+    tipo: string
     createdAt: Date
     updatedAt: Date
     _count: ProveedorCountAggregateOutputType | null
@@ -1677,6 +1684,7 @@ export namespace Prisma {
     responsable?: boolean
     telefono?: boolean
     logo?: boolean
+    tipo?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     productos?: boolean | Proveedor$productosArgs<ExtArgs>
@@ -1690,6 +1698,7 @@ export namespace Prisma {
     responsable?: boolean
     telefono?: boolean
     logo?: boolean
+    tipo?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["proveedor"]>
@@ -1701,6 +1710,7 @@ export namespace Prisma {
     responsable?: boolean
     telefono?: boolean
     logo?: boolean
+    tipo?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
@@ -1723,6 +1733,7 @@ export namespace Prisma {
       responsable: string | null
       telefono: string | null
       logo: string | null
+      tipo: string
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["proveedor"]>
@@ -2125,6 +2136,7 @@ export namespace Prisma {
     readonly responsable: FieldRef<"Proveedor", 'String'>
     readonly telefono: FieldRef<"Proveedor", 'String'>
     readonly logo: FieldRef<"Proveedor", 'String'>
+    readonly tipo: FieldRef<"Proveedor", 'String'>
     readonly createdAt: FieldRef<"Proveedor", 'DateTime'>
     readonly updatedAt: FieldRef<"Proveedor", 'DateTime'>
   }
@@ -8653,6 +8665,7 @@ export namespace Prisma {
     responsable: 'responsable',
     telefono: 'telefono',
     logo: 'logo',
+    tipo: 'tipo',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -8850,6 +8863,7 @@ export namespace Prisma {
     responsable?: StringNullableFilter<"Proveedor"> | string | null
     telefono?: StringNullableFilter<"Proveedor"> | string | null
     logo?: StringNullableFilter<"Proveedor"> | string | null
+    tipo?: StringFilter<"Proveedor"> | string
     createdAt?: DateTimeFilter<"Proveedor"> | Date | string
     updatedAt?: DateTimeFilter<"Proveedor"> | Date | string
     productos?: ProductoListRelationFilter
@@ -8862,6 +8876,7 @@ export namespace Prisma {
     responsable?: SortOrderInput | SortOrder
     telefono?: SortOrderInput | SortOrder
     logo?: SortOrderInput | SortOrder
+    tipo?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     productos?: ProductoOrderByRelationAggregateInput
@@ -8877,6 +8892,7 @@ export namespace Prisma {
     responsable?: StringNullableFilter<"Proveedor"> | string | null
     telefono?: StringNullableFilter<"Proveedor"> | string | null
     logo?: StringNullableFilter<"Proveedor"> | string | null
+    tipo?: StringFilter<"Proveedor"> | string
     createdAt?: DateTimeFilter<"Proveedor"> | Date | string
     updatedAt?: DateTimeFilter<"Proveedor"> | Date | string
     productos?: ProductoListRelationFilter
@@ -8889,6 +8905,7 @@ export namespace Prisma {
     responsable?: SortOrderInput | SortOrder
     telefono?: SortOrderInput | SortOrder
     logo?: SortOrderInput | SortOrder
+    tipo?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: ProveedorCountOrderByAggregateInput
@@ -8906,6 +8923,7 @@ export namespace Prisma {
     responsable?: StringNullableWithAggregatesFilter<"Proveedor"> | string | null
     telefono?: StringNullableWithAggregatesFilter<"Proveedor"> | string | null
     logo?: StringNullableWithAggregatesFilter<"Proveedor"> | string | null
+    tipo?: StringWithAggregatesFilter<"Proveedor"> | string
     createdAt?: DateTimeWithAggregatesFilter<"Proveedor"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Proveedor"> | Date | string
   }
@@ -9367,6 +9385,7 @@ export namespace Prisma {
     responsable?: string | null
     telefono?: string | null
     logo?: string | null
+    tipo?: string
     createdAt?: Date | string
     updatedAt?: Date | string
     productos?: ProductoCreateNestedManyWithoutProveedorInput
@@ -9379,6 +9398,7 @@ export namespace Prisma {
     responsable?: string | null
     telefono?: string | null
     logo?: string | null
+    tipo?: string
     createdAt?: Date | string
     updatedAt?: Date | string
     productos?: ProductoUncheckedCreateNestedManyWithoutProveedorInput
@@ -9391,6 +9411,7 @@ export namespace Prisma {
     responsable?: NullableStringFieldUpdateOperationsInput | string | null
     telefono?: NullableStringFieldUpdateOperationsInput | string | null
     logo?: NullableStringFieldUpdateOperationsInput | string | null
+    tipo?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     productos?: ProductoUpdateManyWithoutProveedorNestedInput
@@ -9403,6 +9424,7 @@ export namespace Prisma {
     responsable?: NullableStringFieldUpdateOperationsInput | string | null
     telefono?: NullableStringFieldUpdateOperationsInput | string | null
     logo?: NullableStringFieldUpdateOperationsInput | string | null
+    tipo?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     productos?: ProductoUncheckedUpdateManyWithoutProveedorNestedInput
@@ -9415,6 +9437,7 @@ export namespace Prisma {
     responsable?: string | null
     telefono?: string | null
     logo?: string | null
+    tipo?: string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -9426,6 +9449,7 @@ export namespace Prisma {
     responsable?: NullableStringFieldUpdateOperationsInput | string | null
     telefono?: NullableStringFieldUpdateOperationsInput | string | null
     logo?: NullableStringFieldUpdateOperationsInput | string | null
+    tipo?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -9437,6 +9461,7 @@ export namespace Prisma {
     responsable?: NullableStringFieldUpdateOperationsInput | string | null
     telefono?: NullableStringFieldUpdateOperationsInput | string | null
     logo?: NullableStringFieldUpdateOperationsInput | string | null
+    tipo?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -9987,6 +10012,7 @@ export namespace Prisma {
     responsable?: SortOrder
     telefono?: SortOrder
     logo?: SortOrder
+    tipo?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -9998,6 +10024,7 @@ export namespace Prisma {
     responsable?: SortOrder
     telefono?: SortOrder
     logo?: SortOrder
+    tipo?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -10009,6 +10036,7 @@ export namespace Prisma {
     responsable?: SortOrder
     telefono?: SortOrder
     logo?: SortOrder
+    tipo?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -11154,6 +11182,7 @@ export namespace Prisma {
     responsable?: string | null
     telefono?: string | null
     logo?: string | null
+    tipo?: string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -11165,6 +11194,7 @@ export namespace Prisma {
     responsable?: string | null
     telefono?: string | null
     logo?: string | null
+    tipo?: string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -11239,6 +11269,7 @@ export namespace Prisma {
     responsable?: NullableStringFieldUpdateOperationsInput | string | null
     telefono?: NullableStringFieldUpdateOperationsInput | string | null
     logo?: NullableStringFieldUpdateOperationsInput | string | null
+    tipo?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -11250,6 +11281,7 @@ export namespace Prisma {
     responsable?: NullableStringFieldUpdateOperationsInput | string | null
     telefono?: NullableStringFieldUpdateOperationsInput | string | null
     logo?: NullableStringFieldUpdateOperationsInput | string | null
+    tipo?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

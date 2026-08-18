@@ -15,7 +15,7 @@ export default async function ProveedoresPage() {
 
   return (
     <div className="page-container">
-      <h1 className="page-title">Gestión de Proveedores</h1>
+      <h1 className="page-title">Gestión de Clientes y Proveedores</h1>
       <ProveedoresClient initialProveedores={proveedores} />
     </div>
   );

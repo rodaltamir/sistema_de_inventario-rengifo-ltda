@@ -15,6 +15,7 @@ model Proveedor {
   responsable   String?
   telefono      String?
   logo          String?
+  tipo          String   @default("PROVEEDOR") // "CLIENTE" | "PROVEEDOR"
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
