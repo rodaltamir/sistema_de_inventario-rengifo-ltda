@@ -1,4 +1,4 @@
-"use client"; 
+"use client";
 
 import { useState, useRef } from "react";
 import { Plus, Edit, Trash2, X, Package, Download, Upload, Check } from "lucide-react";
@@ -11,7 +11,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
   const [productos, setProductos] = useState(initialProductos);
   const [categorias, setCategorias] = useState(initialCategorias || []);
   const [search, setSearch] = useState("");
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,7 +38,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     descripcion: "",
     marca: "",
     unidadMedida: "Unidad",
-    metodoInventario: "Primeras Entradas, Primeras Salidas (PEPS)",
+    metodoInventario: "Promedio Ponderado",
     proveedorId: "",
     categoriaId: "",
     stock: "0",
@@ -46,15 +46,15 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     precioVenta: "0.00",
   });
 
-  const filtered = productos.filter(p => 
-    p.nombre.toLowerCase().includes(search.toLowerCase()) || 
+  const filtered = productos.filter(p =>
+    p.nombre.toLowerCase().includes(search.toLowerCase()) ||
     p.codigo.toLowerCase().includes(search.toLowerCase())
   );
 
-  const filteredForCategoria = productos.filter(p => 
+  const filteredForCategoria = productos.filter(p =>
     !p.categoriaId &&
-    (p.nombre.toLowerCase().includes(categoriaSearch.toLowerCase()) || 
-    p.codigo.toLowerCase().includes(categoriaSearch.toLowerCase()))
+    (p.nombre.toLowerCase().includes(categoriaSearch.toLowerCase()) ||
+      p.codigo.toLowerCase().includes(categoriaSearch.toLowerCase()))
   );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -69,7 +69,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       descripcion: "",
       marca: "",
       unidadMedida: "Unidad",
-      metodoInventario: "Primeras Entradas, Primeras Salidas (PEPS)",
+      metodoInventario: "Promedio Ponderado",
       proveedorId: "",
       categoriaId: "",
       stock: "0",
@@ -87,7 +87,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       descripcion: p.descripcion || "",
       marca: p.marca || "",
       unidadMedida: p.unidadMedida || "Unidad",
-      metodoInventario: p.metodoInventario || "Primeras Entradas, Primeras Salidas (PEPS)",
+      metodoInventario: p.metodoInventario || "Promedio Ponderado",
       proveedorId: p.proveedorId || "",
       categoriaId: p.categoriaId || "",
       stock: p.stock.toString(),
@@ -160,10 +160,10 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(arrayBuffer);
       const worksheet = workbook.worksheets[0];
-      
+
       const headerRow = worksheet.getRow(1);
       const colMap: Record<string, number> = {};
-      
+
       headerRow.eachCell((cell, colNumber) => {
         const val = cell.value?.toString().toUpperCase().trim() || "";
         if (val.includes("CODIGO") || val.includes("CÓDIGO")) colMap.codigo = colNumber;
@@ -183,7 +183,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       const imported: any[] = [];
       worksheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Skip headers
-        
+
         const rawCodigo = row.getCell(colMap.codigo).value;
         const rawNombre = row.getCell(colMap.nombre).value;
         const rawDesc = row.getCell(colMap.descripcion).value;
@@ -209,7 +209,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
           stock: stockStr,
           costo: precioStr,
           precioVenta: precioStr,
-          metodoInventario: "PEPS"
+          metodoInventario: "Promedio Ponderado"
         });
       });
 
@@ -253,21 +253,21 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       Swal.fire('Atención', 'El nombre de la categoría es requerido', 'warning');
       return;
     }
-    
+
     setIsSavingCategoria(true);
     try {
       const nuevaCategoria = await crearCategoriaConProductos(categoriaNombre, selectedProductos);
       setCategorias([...categorias, nuevaCategoria]);
-      
+
       // Update local products state
       if (selectedProductos.length > 0) {
-        setProductos(prev => prev.map(p => 
-          selectedProductos.includes(p.codigo) 
-            ? { ...p, categoriaId: nuevaCategoria.id, categoria: nuevaCategoria } 
+        setProductos(prev => prev.map(p =>
+          selectedProductos.includes(p.codigo)
+            ? { ...p, categoriaId: nuevaCategoria.id, categoria: nuevaCategoria }
             : p
         ));
       }
-      
+
       Swal.fire('¡Éxito!', 'Categoría creada y productos asignados correctamente.', 'success');
       setIsCategoriaModalOpen(false);
       setCategoriaNombre("");
@@ -281,7 +281,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
   };
 
   const toggleProductoSelection = (codigo: string) => {
-    setSelectedProductos(prev => 
+    setSelectedProductos(prev =>
       prev.includes(codigo) ? prev.filter(c => c !== codigo) : [...prev, codigo]
     );
   };
@@ -290,36 +290,36 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     <>
       <div className="card glass">
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <input 
-            type="text" 
-            placeholder="Buscar código o nombre..." 
-            style={{ maxWidth: '300px' }} 
+          <input
+            type="text"
+            placeholder="Buscar código o nombre..."
+            style={{ maxWidth: '300px' }}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          
+
           <div className={styles.headerActions}>
             <button className={`btn ${styles.btnSuccess}`} title="Exportar a Excel/PDF">
               <Download size={18} /> Exportar
             </button>
-            <input 
-              type="file" 
-              accept=".xlsx, .xls" 
-              style={{ display: 'none' }} 
+            <input
+              type="file"
+              accept=".xlsx, .xls"
+              style={{ display: 'none' }}
               ref={fileInputRef}
               onChange={handleFileUpload}
             />
-            <button 
-              className={`btn ${styles.btnSuccess}`} 
-              style={{backgroundColor: '#059669'}} 
+            <button
+              className={`btn ${styles.btnSuccess}`}
+              style={{ backgroundColor: '#059669' }}
               title="Importar desde Excel"
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload size={18} /> Importar Excel
             </button>
-            <button 
-              className="btn btn-outline" 
-              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }} 
+            <button
+              className="btn btn-outline"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
               onClick={() => setIsCategoriaModalOpen(true)}
             >
               <Plus size={18} /> Añadir Categoría
@@ -346,8 +346,8 @@ export default function ProductosClient({ initialProductos, proveedores, initial
             <tbody>
               {filtered.map(p => (
                 <tr key={p.codigo}>
-                  <td style={{fontWeight: '600'}}>{p.codigo}</td>
-                  <td style={{fontWeight: '600'}}>{p.nombre}</td>
+                  <td style={{ fontWeight: '600' }}>{p.codigo}</td>
+                  <td style={{ fontWeight: '600' }}>{p.nombre}</td>
                   <td>
                     {p.categoria ? (
                       <span style={{ background: '#f3f4f6', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', color: '#4b5563' }}>
@@ -358,7 +358,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                     )}
                   </td>
                   <td>
-                    <span style={{ 
+                    <span style={{
                       color: p.stock <= 5 ? 'var(--color-danger)' : 'inherit',
                       fontWeight: p.stock <= 5 ? 'bold' : 'normal'
                     }}>
@@ -399,19 +399,19 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                 <X size={24} />
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit}>
               <div className={styles.modalBody}>
                 {error && <div style={{ color: 'red', marginBottom: '1rem', fontWeight: 'bold' }}>{error}</div>}
-                
+
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Código *</label>
-                    <input 
+                    <input
                       required
-                      type="text" 
+                      type="text"
                       name="codigo"
-                      className={styles.formInput} 
+                      className={styles.formInput}
                       placeholder="PROD-006"
                       value={formData.codigo}
                       onChange={handleInputChange}
@@ -419,11 +419,11 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                   </div>
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Nombre *</label>
-                    <input 
+                    <input
                       required
-                      type="text" 
+                      type="text"
                       name="nombre"
-                      className={styles.formInput} 
+                      className={styles.formInput}
                       placeholder="Nombre del producto"
                       value={formData.nombre}
                       onChange={handleInputChange}
@@ -432,10 +432,10 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
                   <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
                     <label className={styles.formLabel}>Descripción</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       name="descripcion"
-                      className={styles.formInput} 
+                      className={styles.formInput}
                       placeholder="Ej: Caramelo duro sabor fresa (1 Caja x 35 unidades)..."
                       value={formData.descripcion}
                       onChange={handleInputChange}
@@ -444,31 +444,31 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Marca</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       name="marca"
-                      className={styles.formInput} 
+                      className={styles.formInput}
                       placeholder="Ej: Columbia"
                       value={formData.marca}
                       onChange={handleInputChange}
                     />
                   </div>
-                  
+
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Unidad de Medida</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       name="unidadMedida"
-                      className={styles.formInput} 
+                      className={styles.formInput}
                       placeholder="Unidad"
                       value={formData.unidadMedida}
                       onChange={handleInputChange}
                     />
                   </div>
-                  
+
                   <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
                     <label className={styles.formLabel}>Método Inventario</label>
-                    <select 
+                    <select
                       name="metodoInventario"
                       className={styles.formInput}
                       value={formData.metodoInventario}
@@ -482,7 +482,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Proveedor</label>
-                    <select 
+                    <select
                       name="proveedorId"
                       className={styles.formInput}
                       value={formData.proveedorId}
@@ -497,7 +497,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Categoría</label>
-                    <select 
+                    <select
                       name="categoriaId"
                       className={styles.formInput}
                       value={formData.categoriaId}
@@ -512,12 +512,12 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Stock Inicial *</label>
-                    <input 
+                    <input
                       required
-                      type="number" 
+                      type="number"
                       name="stock"
                       min="0"
-                      className={styles.formInput} 
+                      className={styles.formInput}
                       value={formData.stock}
                       onChange={handleInputChange}
                     />
@@ -525,32 +525,32 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Costo Unitario (Bs.)</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       name="costo"
                       min="0"
                       step="0.01"
-                      className={styles.formInput} 
+                      className={styles.formInput}
                       value={formData.costo}
                       onChange={handleInputChange}
                     />
                   </div>
-                  
+
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Precio Venta (Bs.)</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       name="precioVenta"
                       min="0"
                       step="0.01"
-                      className={styles.formInput} 
+                      className={styles.formInput}
                       value={formData.precioVenta}
                       onChange={handleInputChange}
                     />
                   </div>
                 </div>
               </div>
-              
+
               <div className={styles.modalFooter}>
                 <button type="button" className={styles.btnCancel} onClick={() => setIsModalOpen(false)}>
                   Cancelar
@@ -576,19 +576,19 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                 <X size={24} />
               </button>
             </div>
-            
+
             <div className={styles.modalBody} style={{ padding: '1rem', overflowX: 'auto' }}>
               <p style={{ marginBottom: '1rem', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
                 Revisa los datos leídos del Excel. Puedes editar cualquier campo directamente en esta tabla o eliminar las filas que no desees importar.
                 Se importarán <strong>{previewData.length}</strong> productos.
               </p>
-              
+
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#374151' }}>
                   Descripción de la Importación (Opcional, e.g. "Saldo inicial de stock año pasado")
                 </label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Ej: Saldo de stock del año pasado"
                   value={importDescription}
                   onChange={(e) => setImportDescription(e.target.value)}
@@ -603,6 +603,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                     <th style={{ padding: '0.5rem', textAlign: 'left', minWidth: '180px' }}>NOMBRE</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', minWidth: '150px' }}>DESCRIPCIÓN</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', width: '100px' }}>U. MEDIDA</th>
+                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '120px' }}>MÉTODO INV.</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', width: '80px' }}>STOCK</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', width: '90px' }}>COSTO (Bs)</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', width: '90px' }}>PRECIO (Bs)</th>
@@ -613,65 +614,76 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                   {previewData.map((row) => (
                     <tr key={row.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                       <td style={{ padding: '0.25rem' }}>
-                        <input 
-                          type="text" 
-                          value={row.codigo} 
+                        <input
+                          type="text"
+                          value={row.codigo}
                           onChange={(e) => updatePreviewCell(row.id, 'codigo', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                         />
                       </td>
                       <td style={{ padding: '0.25rem' }}>
-                        <input 
-                          type="text" 
-                          value={row.nombre} 
+                        <input
+                          type="text"
+                          value={row.nombre}
                           onChange={(e) => updatePreviewCell(row.id, 'nombre', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                         />
                       </td>
                       <td style={{ padding: '0.25rem' }}>
-                        <input 
-                          type="text" 
-                          value={row.descripcion} 
+                        <input
+                          type="text"
+                          value={row.descripcion}
                           onChange={(e) => updatePreviewCell(row.id, 'descripcion', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                         />
                       </td>
                       <td style={{ padding: '0.25rem' }}>
-                        <input 
-                          type="text" 
-                          value={row.unidadMedida} 
+                        <input
+                          type="text"
+                          value={row.unidadMedida}
                           onChange={(e) => updatePreviewCell(row.id, 'unidadMedida', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                         />
                       </td>
                       <td style={{ padding: '0.25rem' }}>
-                        <input 
-                          type="number" 
-                          value={row.stock} 
+                        <select
+                          value={row.metodoInventario}
+                          onChange={(e) => updatePreviewCell(row.id, 'metodoInventario', e.target.value)}
+                          style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.8rem' }}
+                        >
+                          <option value="Primeras Entradas, Primeras Salidas (PEPS)">PEPS</option>
+                          <option value="Promedio Ponderado">Promedio Ponderado</option>
+                          <option value="Últimas Entradas, Primeras Salidas (UEPS)">UEPS</option>
+                        </select>
+                      </td>
+                      <td style={{ padding: '0.25rem' }}>
+                        <input
+                          type="number"
+                          value={row.stock}
                           onChange={(e) => updatePreviewCell(row.id, 'stock', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                         />
                       </td>
                       <td style={{ padding: '0.25rem' }}>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           step="0.01"
-                          value={row.costo} 
+                          value={row.costo}
                           onChange={(e) => updatePreviewCell(row.id, 'costo', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                         />
                       </td>
                       <td style={{ padding: '0.25rem' }}>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           step="0.01"
-                          value={row.precioVenta} 
+                          value={row.precioVenta}
                           onChange={(e) => updatePreviewCell(row.id, 'precioVenta', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                         />
                       </td>
                       <td style={{ padding: '0.25rem', textAlign: 'center' }}>
-                        <button 
+                        <button
                           type="button"
                           onClick={() => removePreviewRow(row.id)}
                           style={{ color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer' }}
@@ -692,14 +704,14 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                 </tbody>
               </table>
             </div>
-            
+
             <div className={styles.modalFooter}>
               <button type="button" className={styles.btnCancel} onClick={() => setIsPreviewModalOpen(false)}>
                 Cancelar
               </button>
-              <button 
-                type="button" 
-                className={styles.btnSave} 
+              <button
+                type="button"
+                className={styles.btnSave}
                 onClick={handleImportConfirm}
                 disabled={isImporting || previewData.length === 0}
               >
@@ -722,38 +734,38 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                 <X size={24} />
               </button>
             </div>
-            
+
             <form onSubmit={handleCreateCategoria}>
               <div className={styles.modalBody}>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Nombre de la Categoría *</label>
-                  <input 
+                  <input
                     required
-                    type="text" 
-                    className={styles.formInput} 
+                    type="text"
+                    className={styles.formInput}
                     placeholder="Ej: Goma de mascar"
                     value={categoriaNombre}
                     onChange={e => setCategoriaNombre(e.target.value)}
                     style={{ fontSize: '1.1rem' }}
                   />
                 </div>
-                
+
                 <h3 style={{ marginTop: '1.5rem', marginBottom: '0.5rem', fontSize: '1rem', color: '#374151' }}>Seleccionar Productos para esta Categoría</h3>
-                
-                <input 
-                  type="text" 
-                  placeholder="Buscar producto a incluir..." 
+
+                <input
+                  type="text"
+                  placeholder="Buscar producto a incluir..."
                   value={categoriaSearch}
                   onChange={e => setCategoriaSearch(e.target.value)}
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '6px', marginBottom: '1rem' }}
                 />
-                
+
                 <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '6px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                     <thead style={{ position: 'sticky', top: 0, background: '#f9fafb', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                       <tr>
                         <th style={{ padding: '0.5rem', textAlign: 'center', width: '50px' }}>
-                          <input 
+                          <input
                             type="checkbox"
                             style={{ cursor: 'pointer', width: '16px', height: '16px' }}
                             title="Seleccionar todos los filtrados"
@@ -776,8 +788,8 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                       {filteredForCategoria.map(p => (
                         <tr key={p.codigo} style={{ borderBottom: '1px solid #f3f4f6', background: selectedProductos.includes(p.codigo) ? '#f0fdf4' : 'transparent' }}>
                           <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                            <input 
-                              type="checkbox" 
+                            <input
+                              type="checkbox"
                               checked={selectedProductos.includes(p.codigo)}
                               onChange={() => toggleProductoSelection(p.codigo)}
                               style={{ width: '16px', height: '16px', cursor: 'pointer' }}
@@ -800,12 +812,12 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                     </tbody>
                   </table>
                 </div>
-                
+
                 <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#4b5563' }}>
                   Productos seleccionados: <strong>{selectedProductos.length}</strong>
                 </div>
               </div>
-              
+
               <div className={styles.modalFooter}>
                 <button type="button" className={styles.btnCancel} onClick={() => setIsCategoriaModalOpen(false)}>
                   Cancelar

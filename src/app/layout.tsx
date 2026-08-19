@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SaaS Inventario",
+  title: "Inventario Rengifo",
   description: "Sistema Multi-tenant de Inventario",
 };
 

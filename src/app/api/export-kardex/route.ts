@@ -106,7 +106,7 @@ export async function POST(req: Request) {
     const formatDate = (isoStr: string) => {
       if (!isoStr) return '';
       const [y, m, d] = isoStr.split('-');
-      return `${d}/${m}/${y}`;
+      return `${m}/${d}/${y}`;
     };
 
     if (isResumen) {
@@ -534,6 +534,7 @@ export async function POST(req: Request) {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Content-Length': buffer.byteLength.toString(),
       },
     });
   } catch (error: any) {

@@ -48,7 +48,7 @@ export default function LoginPage() {
       <div className={`card ${styles.loginCard}`}>
         <div className={styles.logoSection}>
           <img src="/logo_rengifo_estandar.png" alt="Rengifo Logo" className={styles.mainLogo} />
-          <p className={styles.subtitle}>Sistema de Inventario y Registro de Ventas y Compras</p>
+          <p className={styles.subtitle}>Sistema de Inventario con Registro de Ventas y Compras</p>
         </div>
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.inputGroup}>

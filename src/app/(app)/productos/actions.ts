@@ -75,7 +75,7 @@ export async function createProducto(data: {
       stock: data.stock || 0,
       costo: data.costo || 0,
       precioVenta: data.precioVenta || 0,
-      metodoInventario: data.metodoInventario || "PEPS",
+      metodoInventario: data.metodoInventario || "Promedio Ponderado",
       proveedorId: data.proveedorId || null,
       categoriaId: data.categoriaId || null,
     }
@@ -101,7 +101,7 @@ export async function updateProducto(codigo: string, data: any) {
       stock: data.stock || 0,
       costo: data.costo || 0,
       precioVenta: data.precioVenta || 0,
-      metodoInventario: data.metodoInventario || "PEPS",
+      metodoInventario: data.metodoInventario || "Promedio Ponderado",
       proveedorId: data.proveedorId || null,
       categoriaId: data.categoriaId || null,
     }
@@ -162,7 +162,7 @@ export async function importProductos(productos: any[], descripcion?: string) {
       stock: parseInt(p.stock) || 0,
       costo: parseFloat(p.costo) || 0,
       precioVenta: parseFloat(p.precioVenta) || 0,
-      metodoInventario: p.metodoInventario || "PEPS",
+      metodoInventario: p.metodoInventario || "Promedio Ponderado",
       proveedorId: null
     }))
   });

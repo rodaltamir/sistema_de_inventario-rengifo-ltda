@@ -7,15 +7,15 @@ import { createProveedor } from "../proveedores/actions";
 import Swal from 'sweetalert2';
 import styles from "./transacciones.module.css";
 
-export default function TransaccionClient({ 
-  productos, 
-  proveedores 
-}: { 
-  productos: any[], 
-  proveedores: any[] 
+export default function TransaccionClient({
+  productos,
+  proveedores
+}: {
+  productos: any[],
+  proveedores: any[]
 }) {
   const [modo, setModo] = useState<"VENTA" | "COMPRA">("VENTA");
-  
+
   // General Data
   const [nroDocumento, setNroDocumento] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
@@ -24,10 +24,10 @@ export default function TransaccionClient({
   const [formaPago, setFormaPago] = useState("EFECTIVO");
   const [observaciones, setObservaciones] = useState("");
   const [sinFactura, setSinFactura] = useState(false);
-  
+
   const [descuento, setDescuento] = useState<string | number>("");
   const [abonoInicial, setAbonoInicial] = useState<string | number>("");
-  
+
   // Details
   const [detalles, setDetalles] = useState<Array<{ id: number; productoCodigo: string; cantidad: string | number; precioUnitario: string | number }>>([
     { id: 1, productoCodigo: "", cantidad: 1, precioUnitario: 0 }
@@ -55,7 +55,7 @@ export default function TransaccionClient({
     const val = e.target.value;
     setNitCi(val);
     if (sinFactura) return;
-    
+
     // Autocompletado si encuentra
     const match = proveedores.find(p => p.nit === val && p.tipo === (modo === 'VENTA' ? 'CLIENTE' : 'PROVEEDOR'));
     if (match) setRazonSocial(match.nombre);
@@ -224,6 +224,10 @@ export default function TransaccionClient({
       return Swal.fire('Error', "El abono inicial no puede ser mayor al total general.", 'warning');
     }
 
+    if (formaPago === "CREDITO" && (Number(abonoInicial) || 0) < 1) {
+      return Swal.fire('Error', "Para pagos a CRÉDITO, debe de haner un abono inicial minimo", 'warning');
+    }
+
     // Stock validation check in UI
     if (modo === "VENTA") {
       for (const d of detalles) {
@@ -255,7 +259,7 @@ export default function TransaccionClient({
       });
 
       await Swal.fire('¡Éxito!', '¡Transacción procesada con éxito! El stock ha sido actualizado.', 'success');
-      
+
       // Preguntar si quiere guardar cliente/proveedor
       await preguntarGuardarContacto();
 
@@ -281,15 +285,15 @@ export default function TransaccionClient({
             </h1>
             <p className={styles.subtitle}>Registra compras y ventas con actualización de stock en tiempo real</p>
           </div>
-          
+
           <div className={styles.toggleGroup}>
-            <button 
+            <button
               className={`${styles.toggleBtn} ${modo === "VENTA" ? styles.ventaActive : styles.inactive}`}
               onClick={() => { setModo("VENTA"); setSinFactura(false); setNitCi(""); setRazonSocial(""); }}
             >
               <ShoppingCart size={18} /> REGISTRAR VENTA
             </button>
-            <button 
+            <button
               className={`${styles.toggleBtn} ${modo === "COMPRA" ? styles.compraActive : styles.inactive}`}
               onClick={() => { setModo("COMPRA"); setSinFactura(false); setNitCi(""); setRazonSocial(""); }}
             >
@@ -308,7 +312,7 @@ export default function TransaccionClient({
                 <input type="checkbox" checked={sinFactura} onChange={handleSinFacturaChange} />
                 Sin factura / Sin nombre
               </label>
-              <span style={{ 
+              <span style={{
                 border: `1px solid ${modo === 'VENTA' ? 'var(--color-primary)' : '#3b82f6'}`,
                 color: modo === 'VENTA' ? 'var(--color-primary)' : '#3b82f6',
                 padding: '0.25rem 0.75rem',
@@ -330,16 +334,16 @@ export default function TransaccionClient({
                 <label className={styles.formLabel}>Fecha</label>
                 <input type="date" className={styles.formInput} value={fecha} onChange={e => setFecha(e.target.value)} />
               </div>
-              
+
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>NIT / CI del {modo === "VENTA" ? "Cliente" : "Proveedor"}</label>
-                <input 
-                  type="text" 
-                  className={styles.formInput} 
-                  value={nitCi} 
-                  onChange={handleNitChange} 
-                  disabled={sinFactura} 
-                  placeholder="Ej: 1234567" 
+                <input
+                  type="text"
+                  className={styles.formInput}
+                  value={nitCi}
+                  onChange={handleNitChange}
+                  disabled={sinFactura}
+                  placeholder="Ej: 1234567"
                   list="nits-list"
                 />
                 <datalist id="nits-list">
@@ -350,13 +354,13 @@ export default function TransaccionClient({
               </div>
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Nombre / Razón Social</label>
-                <input 
-                  type="text" 
-                  className={styles.formInput} 
-                  value={razonSocial} 
-                  onChange={handleRazonSocialChange} 
-                  disabled={sinFactura} 
-                  placeholder="Ej: Juan Perez" 
+                <input
+                  type="text"
+                  className={styles.formInput}
+                  value={razonSocial}
+                  onChange={handleRazonSocialChange}
+                  disabled={sinFactura}
+                  placeholder="Ej: Juan Perez"
                   list="nombres-list"
                 />
                 <datalist id="nombres-list">
@@ -394,9 +398,9 @@ export default function TransaccionClient({
                 {detalles.map((d) => (
                   <tr key={d.id}>
                     <td>
-                      <select 
-                        className={styles.formSelect} 
-                        value={d.productoCodigo} 
+                      <select
+                        className={styles.formSelect}
+                        value={d.productoCodigo}
                         onChange={(e) => updateDetalle(d.id, "productoCodigo", e.target.value)}
                       >
                         <option value="" disabled>Seleccione un producto...</option>
@@ -406,19 +410,19 @@ export default function TransaccionClient({
                       </select>
                     </td>
                     <td>
-                      <input 
-                        type="number" 
-                        className={styles.formInput} 
-                        value={d.cantidad} 
+                      <input
+                        type="number"
+                        className={styles.formInput}
+                        value={d.cantidad}
                         onChange={(e) => updateDetalle(d.id, "cantidad", e.target.value)}
                         min="1"
                       />
                     </td>
                     <td>
-                      <input 
-                        type="number" 
-                        className={styles.formInput} 
-                        value={d.precioUnitario} 
+                      <input
+                        type="number"
+                        className={styles.formInput}
+                        value={d.precioUnitario}
                         onChange={(e) => updateDetalle(d.id, "precioUnitario", e.target.value)}
                         step="0.01"
                         min="0"
@@ -455,8 +459,8 @@ export default function TransaccionClient({
                       {((Number(d.cantidad) || 0) * (Number(d.precioUnitario) || 0)).toFixed(2)}
                     </td>
                     <td>
-                      <button 
-                        className="btn btn-danger" 
+                      <button
+                        className="btn btn-danger"
                         onClick={() => eliminarFila(d.id)}
                         style={{ padding: '0.25rem' }}
                         title="Eliminar fila"
@@ -504,7 +508,7 @@ export default function TransaccionClient({
                   <input type="text" className={styles.formInput} value={observaciones} onChange={e => setObservaciones(e.target.value)} placeholder="Notas adicionales..." />
                 </div>
               </div>
-              
+
               <div className={styles.totalsCard}>
                 <div className={styles.totalRow}>
                   <span>SUBTOTAL:</span>
@@ -524,28 +528,28 @@ export default function TransaccionClient({
         </div>
 
         <div className={styles.footer}>
-            <button 
-              className="btn btn-secondary" 
-              onClick={() => {
-                Swal.fire({
-                  title: '¿Limpiar formulario?',
-                  text: '¿Seguro que desea limpiar todo el formulario?',
-                  icon: 'warning',
-                  showCancelButton: true,
-                  confirmButtonColor: '#3085d6',
-                  cancelButtonColor: '#d33',
-                  confirmButtonText: 'Sí, limpiar',
-                  cancelButtonText: 'Cancelar'
-                }).then((result) => {
-                  if (result.isConfirmed) {
-                    resetForm();
-                  }
-                });
-              }}
-            >
-              Cancelar
-            </button>
-          <button 
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              Swal.fire({
+                title: '¿Limpiar formulario?',
+                text: '¿Seguro que desea limpiar todo el formulario?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Sí, limpiar',
+                cancelButtonText: 'Cancelar'
+              }).then((result) => {
+                if (result.isConfirmed) {
+                  resetForm();
+                }
+              });
+            }}
+          >
+            Cancelar
+          </button>
+          <button
             className={modo === 'VENTA' ? styles.btnProcesarVenta : styles.btnProcesarCompra}
             onClick={handleSubmit}
             disabled={loading}

@@ -267,7 +267,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     const formatDate = (isoStr: string) => {
       if (!isoStr) return '';
       const [y, m, d] = isoStr.split('-');
-      return `${d}/${m}/${y}`;
+      return `${m}/${d}/${y}`;
     };
 
     // 2. Title
@@ -583,7 +583,8 @@ export default function KardexClient({ initialMovimientos, productos, categorias
 
     const now = new Date();
     const formattedDate = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
-    const fileName = `kardex_${isTodos ? 'todos' : 'prod_' + appliedFilters.producto}_${formattedDate}.pdf`;
+    const rawFileName = `kardex_${isTodos ? 'todos' : 'prod_' + appliedFilters.producto}_${formattedDate}.pdf`;
+    const fileName = rawFileName.replace(/[<>:"/\\|?*]+/g, '_');
 
     doc.save(fileName);
   };
@@ -643,11 +644,14 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       a.href = url;
       const now = new Date();
       const formattedDate = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
-      const fileName = `kardex_${isTodos ? 'todos' : 'prod_' + appliedFilters.producto}_${formattedDate}.xlsx`;
+      const rawFileName = `kardex_${isTodos ? 'todos' : 'prod_' + appliedFilters.producto}_${formattedDate}.xlsx`;
+      const fileName = rawFileName.replace(/[<>:"/\\|?*]+/g, '_');
       
       a.download = fileName;
+      document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => window.URL.revokeObjectURL(url), 10000);
     } catch (err: any) {
       Swal.fire('Error', err.message, 'error');
     }
