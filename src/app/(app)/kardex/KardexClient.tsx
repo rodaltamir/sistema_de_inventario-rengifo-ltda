@@ -6,6 +6,7 @@ import autoTable from "jspdf-autotable";
 
 import Swal from 'sweetalert2';
 import styles from "./kardex.module.css";
+import SearchableProductSelect from './SearchableProductSelect';
 
 export default function KardexClient({ initialMovimientos, productos, categorias = [], currentTenant }: { initialMovimientos: any[], productos: any[], categorias?: any[], currentTenant?: any }) {
   const [movimientos] = useState(initialMovimientos);
@@ -89,6 +90,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
 
     // We pre-filter products based on category (if applicable)
     const validProductos = productos.filter(p => cFiltro === "TODAS" || p.categoriaId === cFiltro);
+    validProductos.sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }));
     const validProductIds = new Set(validProductos.map(p => p.codigo));
 
     // Filter movements
@@ -117,8 +119,10 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       if (pFiltro !== "TODOS" && p.codigo !== pFiltro) return;
       resumenMap.set(p.codigo, {
         codigo: p.codigo,
-        descripcion: p.nombre,
+        nombre: p.nombre,
+        descripcion: p.descripcion || '-',
         unidad: p.unidadMedida || 'Unidad',
+        metodoInventario: p.metodoInventario || 'Promedio Ponderado',
         entradas: 0,
         entradasBs: 0,
         salidas: 0,
@@ -161,13 +165,17 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       // Accumulate for summary (all history up to fechaHasta, ignoring fechaDesde)
       if (pSummary) {
         if (isCompra) {
-          pSummary.entradas += m.cantidad;
-          pSummary.entradasBs += costoMovimiento;
+          if (!isBeforeRange) {
+            pSummary.entradas += m.cantidad;
+            pSummary.entradasBs += costoMovimiento;
+          }
           pSummary.saldo += m.cantidad;
           pSummary.saldoBs += costoMovimiento;
         } else {
-          pSummary.salidas += m.cantidad;
-          pSummary.salidasBs += costoMovimiento;
+          if (!isBeforeRange) {
+            pSummary.salidas += m.cantidad;
+            pSummary.salidasBs += costoMovimiento;
+          }
           pSummary.saldo -= m.cantidad;
           pSummary.saldoBs -= costoMovimiento;
         }
@@ -267,7 +275,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     const formatDate = (isoStr: string) => {
       if (!isoStr) return '';
       const [y, m, d] = isoStr.split('-');
-      return `${m}/${d}/${y}`;
+      return `${d}/${m}/${y}`;
     };
 
     // 2. Title
@@ -347,6 +355,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       if (conImportes) {
         head.push([
           { content: 'CÓD. ITEM', rowSpan: 2, styles: { halign: 'center', valign: 'middle', fillColor: [235, 235, 235] as any, textColor: [0, 0, 0] as any } },
+          { content: 'NOMBRE', rowSpan: 2, styles: { halign: 'center', valign: 'middle', fillColor: [235, 235, 235] as any, textColor: [0, 0, 0] as any } },
           { content: 'DESCRIPCIÓN', rowSpan: 2, styles: { halign: 'center', valign: 'middle', fillColor: [235, 235, 235] as any, textColor: [0, 0, 0] as any } },
           { content: 'UNIDAD', rowSpan: 2, styles: { halign: 'center', valign: 'middle', fillColor: [235, 235, 235] as any, textColor: [0, 0, 0] as any } },
           { content: 'ENTRADA', colSpan: 3, styles: { halign: 'center', fillColor: [11, 58, 90] as any, textColor: [255, 255, 255] as any } },
@@ -386,7 +395,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
 
         if (kardexData.resumenRows.length > 0) {
            body.push([
-             { content: 'TOTALES', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } as any },
+             { content: 'TOTALES', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } as any },
              { content: totEntCant.toString(), styles: { fontStyle: 'bold' } as any },
              { content: '-', styles: { fontStyle: 'bold', halign: 'center' } as any },
              { content: totEntBs.toFixed(2), styles: { fontStyle: 'bold' } as any },
@@ -400,6 +409,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       } else {
         head.push([
           { content: 'COD. ITEM', styles: { fillColor: [235, 235, 235] as any, textColor: [0, 0, 0] as any } },
+          { content: 'NOMBRE', styles: { fillColor: [235, 235, 235] as any, textColor: [0, 0, 0] as any } },
           { content: 'DESCRIPCIÓN', styles: { fillColor: [235, 235, 235] as any, textColor: [0, 0, 0] as any } },
           { content: 'UNIDAD', styles: { fillColor: [235, 235, 235] as any, textColor: [0, 0, 0] as any } },
           { content: 'ENTRADAS', styles: { halign: 'center', fillColor: [11, 58, 90] as any, textColor: [255, 255, 255] as any } },
@@ -413,14 +423,14 @@ export default function KardexClient({ initialMovimientos, productos, categorias
           totSalCant += r.salidas;
           totSaldoCant += r.saldo;
           body.push([
-            r.codigo, r.descripcion, r.unidad,
+            r.codigo, r.nombre, r.descripcion, r.unidad,
             r.entradas || '-', r.salidas || '-', r.saldo || '-'
           ]);
         });
         
         if (kardexData.resumenRows.length > 0) {
            body.push([
-             { content: 'TOTALES', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } as any },
+             { content: 'TOTALES', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } as any },
              { content: totEntCant.toString(), styles: { fontStyle: 'bold' } as any },
              { content: totSalCant.toString(), styles: { fontStyle: 'bold' } as any },
              { content: totSaldoCant.toString(), styles: { fontStyle: 'bold' } as any }
@@ -697,12 +707,16 @@ export default function KardexClient({ initialMovimientos, productos, categorias
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--color-text-muted)' }}>Producto</label>
-              <select className="input-base" value={productoUI} onChange={e => setProductoUI(e.target.value)}>
-                <option value="TODOS">-- TODOS LOS PRODUCTOS --</option>
-                {productos.filter(p => categoriaUI === "TODAS" || p.categoriaId === categoriaUI).map(p => (
-                  <option key={p.codigo} value={p.codigo}>{p.codigo} - {p.nombre}</option>
-                ))}
-              </select>
+              <div style={{ zIndex: 100 }}>
+                <SearchableProductSelect
+                  value={productoUI}
+                  onChange={(val) => setProductoUI(val)}
+                  productos={[
+                    { codigo: 'TODOS', nombre: 'TODOS LOS PRODUCTOS', descripcion: '', stock: '-', unidadMedida: '' },
+                    ...productos.filter(p => categoriaUI === "TODAS" || p.categoriaId === categoriaUI)
+                  ]}
+                />
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -805,6 +819,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
                   <>
                     <tr>
                       <th rowSpan={2}>COD. ITEM</th>
+                      <th rowSpan={2}>NOMBRE</th>
                       <th rowSpan={2}>DESCRIPCIÓN</th>
                       <th rowSpan={2}>UNIDAD</th>
                       <th colSpan={3} style={{ textAlign: 'center', background: '#fee2e2' }}>ENTRADA</th>
@@ -825,6 +840,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
                 ) : (
                   <tr>
                     <th>COD. ITEM</th>
+                    <th>NOMBRE</th>
                     <th>DESCRIPCIÓN</th>
                     <th>UNIDAD</th>
                     <th style={{ textAlign: 'center' }}>ENTRADAS</th>
@@ -841,6 +857,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
                   return (
                     <tr key={r.codigo}>
                       <td>{r.codigo}</td>
+                      <td style={{ fontWeight: 600 }}>{r.nombre}</td>
                       <td>{r.descripcion}</td>
                       <td>{r.unidad}</td>
                       {conImportes ? (
@@ -869,7 +886,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
 
                 {kardexData.resumenRows.length === 0 && (
                   <tr>
-                    <td colSpan={conImportes ? 11 : 6} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>
+                    <td colSpan={conImportes ? 12 : 7} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>
                       No hay productos para mostrar.
                     </td>
                   </tr>
@@ -889,7 +906,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
 
                   return (
                     <tr style={{ background: '#f9fafb', fontWeight: 'bold' }}>
-                      <td colSpan={3} style={{ textAlign: 'right' }}>TOTALES</td>
+                      <td colSpan={4} style={{ textAlign: 'right' }}>TOTALES</td>
                       {conImportes ? (
                         <>
                           <td style={{ textAlign: 'center' }}>{totEntCant}</td>
@@ -1052,3 +1069,4 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     </>
   );
 }
+

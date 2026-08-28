@@ -23,6 +23,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importDescription, setImportDescription] = useState("");
+  const [importYear, setImportYear] = useState<number>(new Date().getFullYear());
 
   // Categoria Modal State
   const [isCategoriaModalOpen, setIsCategoriaModalOpen] = useState(false);
@@ -49,7 +50,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
   const filtered = productos.filter(p =>
     p.nombre.toLowerCase().includes(search.toLowerCase()) ||
     p.codigo.toLowerCase().includes(search.toLowerCase())
-  );
+  ).sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }));
 
   const filteredForCategoria = productos.filter(p =>
     !p.categoriaId &&
@@ -161,55 +162,73 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       await workbook.xlsx.load(arrayBuffer);
       const worksheet = workbook.worksheets[0];
 
-      const headerRow = worksheet.getRow(1);
-      const colMap: Record<string, number> = {};
+      let c_cod = 1, c_nom = 2, c_desc = 3, c_mar = -1, c_uni = 4;
+      let c_ec = 5, c_sc = 6, c_sdc = 7, c_ecos = 8, c_scos = 9;
 
-      headerRow.eachCell((cell, colNumber) => {
-        const val = cell.value?.toString().toUpperCase().trim() || "";
-        if (val.includes("CODIGO") || val.includes("CÓDIGO")) colMap.codigo = colNumber;
-        else if (val.includes("NOMBRE")) colMap.nombre = colNumber;
-        else if (val.includes("DESCRIPCION") || val.includes("DESCRIPCIÓN")) colMap.descripcion = colNumber;
-        else if (val.includes("STOCK")) colMap.stock = colNumber;
-        else if (val.includes("PRECIO")) colMap.precio = colNumber;
+      const headerRow2 = worksheet.getRow(2);
+      headerRow2.eachCell((cell, colNumber) => {
+        const val = String(cell.value || '').toUpperCase();
+        if (val.includes('MARCA')) {
+          c_mar = colNumber;
+          // If MARCA is placed before or at the UNIDAD column, shift the rest of the columns
+          if (colNumber <= c_uni) {
+            c_uni++; c_ec++; c_sc++; c_sdc++; c_ecos++; c_scos++;
+          }
+        }
       });
-
-      // Fallback if headers are not perfectly matched
-      if (!colMap.codigo) colMap.codigo = 1;
-      if (!colMap.nombre) colMap.nombre = 2;
-      if (!colMap.descripcion) colMap.descripcion = 3;
-      if (!colMap.stock) colMap.stock = 4;
-      if (!colMap.precio) colMap.precio = 5;
 
       const imported: any[] = [];
       worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return; // Skip headers
+        if (rowNumber <= 2) return; // Skip headers (rows 1 and 2)
 
-        const rawCodigo = row.getCell(colMap.codigo).value;
-        const rawNombre = row.getCell(colMap.nombre).value;
-        const rawDesc = row.getCell(colMap.descripcion).value;
-        const rawStock = row.getCell(colMap.stock).value;
-        const rawPrecio = row.getCell(colMap.precio).value;
+        const rawCodigo = row.getCell(c_cod).value;
+        const rawNombre = row.getCell(c_nom).value;
+        const rawDesc = row.getCell(c_desc).value;
+        const rawMarca = c_mar !== -1 ? row.getCell(c_mar).value : "";
+        const rawUnidad = row.getCell(c_uni).value;
+        const rawEntradaCant = row.getCell(c_ec).value;
+        const rawSalidaCant = row.getCell(c_sc).value;
+        const rawSaldoCant = row.getCell(c_sdc).value;
+        const rawEntradaCosto = row.getCell(c_ecos).value;
+        const rawSalidaCosto = row.getCell(c_scos).value;
 
-        // Si la fila está completamente vacía (sin código ni nombre relevante), se salta
+        // Si la fila está vacía, saltar
         if (rawCodigo == null && rawNombre == null) return;
 
         const codigo = rawCodigo?.toString() || `PROD-${Date.now()}-${rowNumber}`;
         const nombre = rawNombre?.toString() || "Sin Nombre";
         const descripcion = rawDesc?.toString() || "";
-        const stockStr = rawStock?.toString() || "0";
-        const precioStr = rawPrecio?.toString() || "0";
+        const marca = rawMarca?.toString() || "";
+        const unidadMedida = rawUnidad?.toString() || "Unidad";
+
+        const parseNum = (val: any) => {
+          if (val == null) return 0;
+          if (typeof val === 'number') return val;
+          return parseFloat(val.toString().replace(/,/g, '')) || 0;
+        };
+
+        const entradaCant = parseNum(rawEntradaCant);
+        const salidaCant = parseNum(rawSalidaCant);
+        const saldoCant = parseNum(rawSaldoCant);
+        const entradaCosto = parseNum(rawEntradaCosto);
+        const salidaCosto = parseNum(rawSalidaCosto);
+
+        const costoUnitario = entradaCant > 0 ? (entradaCosto / entradaCant).toFixed(2) : "0.00";
+        const precioVentaUnitario = salidaCant > 0 ? (salidaCosto / salidaCant).toFixed(2) : "0.00";
 
         imported.push({
           id: Date.now() + Math.random(), // id temporal para la UI
           codigo,
           nombre,
           descripcion,
-          marca: "",
-          unidadMedida: "Unidad",
-          stock: stockStr,
-          costo: precioStr,
-          precioVenta: precioStr,
-          metodoInventario: "Promedio Ponderado"
+          marca,
+          unidadMedida,
+          metodoInventario: "Promedio Ponderado",
+          entradaCant,
+          salidaCant,
+          stock: saldoCant.toString(),
+          costo: costoUnitario,
+          precioVenta: precioVentaUnitario,
         });
       });
 
@@ -226,7 +245,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     setIsImporting(true);
     try {
       // El array que mandamos debe coincidir con lo que espera el server action
-      await importProductos(previewData, importDescription);
+      await importProductos(previewData, importDescription, importYear);
       setIsPreviewModalOpen(false);
       setPreviewData([]);
       setImportDescription("");
@@ -516,7 +535,6 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                       required
                       type="number"
                       name="stock"
-                      min="0"
                       className={styles.formInput}
                       value={formData.stock}
                       onChange={handleInputChange}
@@ -577,36 +595,49 @@ export default function ProductosClient({ initialProductos, proveedores, initial
               </button>
             </div>
 
-            <div className={styles.modalBody} style={{ padding: '1rem', overflowX: 'auto' }}>
+            <div className={styles.modalBody} style={{ padding: '1rem', overflowX: 'auto', overflowY: 'auto', maxHeight: '60vh' }}>
               <p style={{ marginBottom: '1rem', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
                 Revisa los datos leídos del Excel. Puedes editar cualquier campo directamente en esta tabla o eliminar las filas que no desees importar.
                 Se importarán <strong>{previewData.length}</strong> productos.
               </p>
 
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#374151' }}>
-                  Descripción de la Importación (Opcional, e.g. "Saldo inicial de stock año pasado")
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: Saldo de stock del año pasado"
-                  value={importDescription}
-                  onChange={(e) => setImportDescription(e.target.value)}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                />
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#374151' }}>
+                    Descripción de la Importación (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Saldo de stock del año pasado"
+                    value={importDescription}
+                    onChange={(e) => setImportDescription(e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                  />
+                </div>
+                <div style={{ width: '120px' }}>
+                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#374151' }}>
+                    Año *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={importYear}
+                    onChange={(e) => setImportYear(parseInt(e.target.value))}
+                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                  />
+                </div>
               </div>
 
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                <thead>
-                  <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 10 }}>
+                  <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                     <th style={{ padding: '0.5rem', textAlign: 'left', minWidth: '120px' }}>CÓDIGO</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', minWidth: '180px' }}>NOMBRE</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left', minWidth: '150px' }}>DESCRIPCIÓN</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '100px' }}>U. MEDIDA</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '120px' }}>MÉTODO INV.</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '80px' }}>STOCK</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '90px' }}>COSTO (Bs)</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '90px' }}>PRECIO (Bs)</th>
+                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '80px' }}>ENTRADAS</th>
+                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '80px' }}>SALIDAS</th>
+                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '80px' }}>SALDO</th>
+                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '90px' }}>C. UNIT</th>
+                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '90px' }}>P. VENTA</th>
                     <th style={{ padding: '0.5rem', textAlign: 'center', width: '50px' }}></th>
                   </tr>
                 </thead>
@@ -631,30 +662,19 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                       </td>
                       <td style={{ padding: '0.25rem' }}>
                         <input
-                          type="text"
-                          value={row.descripcion}
-                          onChange={(e) => updatePreviewCell(row.id, 'descripcion', e.target.value)}
+                          type="number"
+                          value={row.entradaCant}
+                          onChange={(e) => updatePreviewCell(row.id, 'entradaCant', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                         />
                       </td>
                       <td style={{ padding: '0.25rem' }}>
                         <input
-                          type="text"
-                          value={row.unidadMedida}
-                          onChange={(e) => updatePreviewCell(row.id, 'unidadMedida', e.target.value)}
+                          type="number"
+                          value={row.salidaCant}
+                          onChange={(e) => updatePreviewCell(row.id, 'salidaCant', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                         />
-                      </td>
-                      <td style={{ padding: '0.25rem' }}>
-                        <select
-                          value={row.metodoInventario}
-                          onChange={(e) => updatePreviewCell(row.id, 'metodoInventario', e.target.value)}
-                          style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.8rem' }}
-                        >
-                          <option value="Primeras Entradas, Primeras Salidas (PEPS)">PEPS</option>
-                          <option value="Promedio Ponderado">Promedio Ponderado</option>
-                          <option value="Últimas Entradas, Primeras Salidas (UEPS)">UEPS</option>
-                        </select>
                       </td>
                       <td style={{ padding: '0.25rem' }}>
                         <input

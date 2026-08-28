@@ -106,17 +106,17 @@ export async function POST(req: Request) {
     const formatDate = (isoStr: string) => {
       if (!isoStr) return '';
       const [y, m, d] = isoStr.split('-');
-      return `${m}/${d}/${y}`;
+      return `${d}/${m}/${y}`;
     };
 
     if (isResumen) {
       // ===== LOGICA PARA RESUMEN GENERAL O CATEGORIA =====
       const fechaTexto = `DEL ${formatDate(fechaDesde) || '(INICIO)'} AL ${formatDate(fechaHasta) || '(ACTUALIDAD)'}`;
-      worksheet.getCell('J3').value = fechaTexto;
+      worksheet.getCell('G3').value = fechaTexto;
       worksheet.getCell('F3').value = ''; // Limpiar el texto incorrecto en F3
 
       worksheet.getCell('E7').value = categoriaNombre || 'TODAS';
-      worksheet.getCell('E9').value = 'PEPS';
+      worksheet.getCell('E9').value = resumenRows.length > 0 ? (resumenRows[0].metodoInventario || 'Promedio Ponderado') : 'Promedio Ponderado';
 
       if (!conImportes) {
          // Ocultar las columnas relacionadas con importes
@@ -144,11 +144,16 @@ export async function POST(req: Request) {
         });
         
         row.getCell('A').value = r.codigo;
-        // Merge cells for description like the template does (B-H)
         try {
-          worksheet.mergeCells(`B${currentRow}:H${currentRow}`);
+          worksheet.mergeCells(`B${currentRow}:E${currentRow}`);
         } catch(e) { /* Ignore if already merged */ }
-        row.getCell('B').value = r.descripcion;
+        row.getCell('B').value = r.nombre;
+        
+        try {
+          worksheet.mergeCells(`F${currentRow}:H${currentRow}`);
+        } catch(e) { /* Ignore */ }
+        row.getCell('F').value = r.descripcion;
+        
         row.getCell('I').value = r.unidad;
         
         row.getCell('J').value = r.entradas > 0 ? Number(r.entradas) : '-';
@@ -281,7 +286,7 @@ export async function POST(req: Request) {
         worksheet.getCell('B9').value = 'MÉTODO DE INVENTARIO:';
         worksheet.getCell('B9').font = { bold: true };
         
-        worksheet.getCell('D9').value = 'PEPS';
+        worksheet.getCell('D9').value = productoSeleccionado.metodoInventario || 'Promedio Ponderado';
         worksheet.getCell('D9').font = { bold: false };
         
         worksheet.getCell('G9').value = productoSeleccionado.nombre;

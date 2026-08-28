@@ -130,66 +130,113 @@ export async function deleteProducto(codigo: string) {
   revalidatePath("/productos");
 }
 
-export async function importProductos(productos: any[], descripcion?: string) {
+export async function importProductos(productos: any[], descripcion?: string, importYear?: number) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.currentConnectionString) throw new Error("No hay sesión activa");
 
   const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
 
-  // Identificar qué productos ya existen para no insertarlos
-  const existingProducts = await tenantPrisma.producto.findMany({
-    where: { 
-      codigo: { in: productos.map(p => p.codigo) },
-      activo: true
-    },
-    select: { codigo: true }
-  });
-  
-  const existingCodes = new Set(existingProducts.map(p => p.codigo));
-  const productsToInsert = productos.filter(p => !existingCodes.has(p.codigo));
-
-  if (productsToInsert.length === 0) {
+  if (productos.length === 0) {
     return 0; // Nada nuevo que importar
   }
 
-  await tenantPrisma.producto.createMany({
-    data: productsToInsert.map(p => ({
-      codigo: p.codigo,
-      nombre: p.nombre,
-      descripcion: p.descripcion || "",
-      marca: p.marca || "",
-      unidadMedida: p.unidadMedida || "Unidad",
-      stock: parseInt(p.stock) || 0,
-      costo: parseFloat(p.costo) || 0,
-      precioVenta: parseFloat(p.precioVenta) || 0,
-      metodoInventario: p.metodoInventario || "Promedio Ponderado",
-      proveedorId: null
-    }))
-  });
-
-  const productsWithStock = productsToInsert.filter(p => (parseInt(p.stock) || 0) > 0);
-
-  if (productsWithStock.length > 0) {
-    const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-    const desc = descripcion || "Saldo inicial de inventario";
+  // Upsert products to update existing ones and create new ones
+  for (const p of productos) {
+    const qtyStock = parseInt(p.stock) || 0;
+    const cost = parseFloat(p.costo) || 0;
+    const pVenta = parseFloat(p.precioVenta) || 0;
     
+    const exists = await tenantPrisma.producto.findUnique({
+      where: { codigo: p.codigo }
+    });
+
+    if (exists) {
+      await tenantPrisma.producto.update({
+        where: { codigo: p.codigo },
+        data: {
+          nombre: p.nombre,
+          descripcion: p.descripcion || "",
+          marca: p.marca || "",
+          unidadMedida: p.unidadMedida || "Unidad",
+          stock: qtyStock,
+          costo: cost,
+          precioVenta: pVenta,
+        }
+      });
+    } else {
+      await tenantPrisma.producto.create({
+        data: {
+          codigo: p.codigo,
+          nombre: p.nombre,
+          descripcion: p.descripcion || "",
+          marca: p.marca || "",
+          unidadMedida: p.unidadMedida || "Unidad",
+          stock: qtyStock,
+          costo: cost,
+          precioVenta: pVenta,
+          metodoInventario: p.metodoInventario || "Promedio Ponderado",
+          proveedorId: null
+        }
+      });
+    }
+  }
+
+  const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+  const desc = descripcion || `Importación Histórica ${importYear || ""}`.trim();
+  
+  // Utilizar UTC a mediodía para evitar que la conversión de zonas horarias retrase la fecha al año anterior (ej. 31/12/2024 en vez de 01/01/2025)
+  const yearDateStart = importYear ? new Date(Date.UTC(importYear, 0, 2, 12, 0, 0)) : new Date();
+  const yearDateEnd = importYear ? new Date(Date.UTC(importYear, 11, 30, 12, 0, 0)) : new Date();
+
+  // 1. Transaction for COMPRAS (Entradas)
+  const compras = productos.filter(p => (parseInt(p.entradaCant) || 0) > 0);
+  if (compras.length > 0) {
     await tenantPrisma.transaccion.create({
       data: {
-        tipoTransaccion: "SALDO INICIAL", // Importación inicial como SALDO INICIAL
-        nroDocumento: "IMP-" + ts,
+        tipoTransaccion: "COMPRA",
+        nroDocumento: "IMP-COMPRA-" + ts,
         nitCi: "0",
-        razonSocial: "SISTEMA - IMPORTACIÓN INICIAL",
+        razonSocial: "SISTEMA - HISTÓRICO",
         observaciones: desc,
         formaPago: "NINGUNO",
+        fecha: yearDateStart,
         detalles: {
-          create: productsWithStock.map(p => {
-            const qty = parseInt(p.stock) || 0;
-            const cost = parseFloat(p.costo) || 0;
+          create: compras.map(p => {
+            const qty = parseInt(p.entradaCant) || 0;
+            const unitCost = parseFloat(p.costo) || 0;
             return {
               productoCodigo: p.codigo,
               cantidad: qty,
-              precioUnitario: cost,
-              subtotal: qty * cost
+              precioUnitario: unitCost,
+              subtotal: qty * unitCost
+            };
+          })
+        }
+      }
+    });
+  }
+
+  // 2. Transaction for VENTAS (Salidas)
+  const ventas = productos.filter(p => (parseInt(p.salidaCant) || 0) > 0);
+  if (ventas.length > 0) {
+    await tenantPrisma.transaccion.create({
+      data: {
+        tipoTransaccion: "VENTA",
+        nroDocumento: "IMP-VENTA-" + ts,
+        nitCi: "0",
+        razonSocial: "SISTEMA - HISTÓRICO",
+        observaciones: desc,
+        formaPago: "NINGUNO",
+        fecha: yearDateEnd,
+        detalles: {
+          create: ventas.map(p => {
+            const qty = parseInt(p.salidaCant) || 0;
+            const unitSale = parseFloat(p.precioVenta) || 0;
+            return {
+              productoCodigo: p.codigo,
+              cantidad: qty,
+              precioUnitario: unitSale,
+              subtotal: qty * unitSale
             };
           })
         }
@@ -198,5 +245,5 @@ export async function importProductos(productos: any[], descripcion?: string) {
   }
 
   revalidatePath("/productos");
-  return productsToInsert.length;
+  return productos.length;
 }
