@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Plus, Edit, Trash2, X, Package, Download, Upload, Check } from "lucide-react";
+import { Plus, Edit, Trash2, X, Package, Download, Upload, Check, Calculator } from "lucide-react";
 import { createProducto, updateProducto, deleteProducto, importProductos, crearCategoriaConProductos } from "./actions";
 import ExcelJS from "exceljs";
 import Swal from 'sweetalert2';
@@ -57,6 +57,76 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     (p.nombre.toLowerCase().includes(categoriaSearch.toLowerCase()) ||
       p.codigo.toLowerCase().includes(categoriaSearch.toLowerCase()))
   );
+
+    const calcularDIMProduct = async () => {
+    const costo = parseFloat(formData.costo) || 0;
+    
+    if (costo <= 0) {
+      Swal.fire('Error', 'Debe ingresar un costo válido mayor a 0 antes de calcular el DIM.', 'error');
+      return;
+    }
+    
+    const { value: formValues } = await Swal.fire({
+      didOpen: () => { const container = Swal.getContainer(); if (container) container.style.zIndex = '999999'; },
+      title: 'Calcular DIM',
+      html: `
+        <div style="text-align: left; margin-top: 10px;">
+          <label style="font-size: 0.9rem; font-weight: bold;">Costo Unitario Actual (Bs.)</label>
+          <input id="swal-costo" type="number" class="swal2-input" value="${costo}" readonly style="background-color: #f3f4f6; cursor: not-allowed; margin-bottom: 15px;">
+          
+          <label style="font-size: 0.9rem; font-weight: bold;">Porcentaje DIM (%)</label>
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+            <input id="swal-dim" type="range" min="0" max="100" step="1" value="30" style="flex: 1;">
+            <span id="swal-dim-val" style="min-width: 40px; font-weight: bold;">30%</span>
+          </div>
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: 'Aplicar',
+      cancelButtonText: 'Cancelar',
+      didRender: () => {
+        const slider = document.getElementById('swal-dim') as HTMLInputElement;
+        const valSpan = document.getElementById('swal-dim-val');
+        if (slider && valSpan) {
+          slider.oninput = () => {
+            valSpan.innerText = `${slider.value}%`;
+          };
+        }
+      },
+      preConfirm: () => {
+        const dimVal = (document.getElementById('swal-dim') as HTMLInputElement).value;
+        return { dim: parseFloat(dimVal) };
+      }
+    });
+
+    if (formValues) {
+      const dimMultiplier = 1 + (formValues.dim / 100);
+      let calculated = costo * dimMultiplier;
+      calculated = parseFloat(calculated.toFixed(5));
+      
+      setFormData(prev => ({
+        ...prev,
+        precioVenta: calculated.toString()
+      }));
+
+      Swal.fire({
+        didOpen: () => { const container = Swal.getContainer(); if (container) container.style.zIndex = '999999'; },
+        icon: 'success',
+        title: 'DIM Aplicado!',
+        html: `
+          <div style="font-size: 1rem; color: #475569; margin-top: 10px;">
+            <p>Se actualizó el Precio de Venta con:</p>
+            <p><strong>Costo:</strong> Bs. ${costo}</p>
+            <p><strong>DIM:</strong> ${formValues.dim}%</p>
+            <p><strong>Precio Calculado:</strong> Bs. ${calculated}</p>
+          </div>
+        `,
+        timer: 2000,
+        showConfirmButton: false
+      });
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -555,7 +625,12 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>Precio Venta (Bs.)</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <label className={styles.formLabel} style={{ marginBottom: 0 }}>Precio Venta (Bs.) *</label>
+                        <button type="button" onClick={calcularDIMProduct} style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <Calculator size={14} /> Calc. DIM
+                        </button>
+                      </div>
                     <input
                       type="number"
                       name="precioVenta"
@@ -853,3 +928,8 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     </>
   );
 }
+
+
+
+
+

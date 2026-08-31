@@ -96,12 +96,39 @@ export default function HistorialClient({ transacciones }: { transacciones: any[
               </button>
             </div>
             <div className={styles.modalBody}>
-              <div style={{marginBottom: '1rem'}}>
-                <strong>{selectedTx.tipoTransaccion === "VENTA" ? "Cliente: " : "Proveedor: "}</strong> {selectedTx.razonSocial} <br/>
-                <strong>NIT/CI: </strong> {selectedTx.nitCi} <br/>
-                <strong>Forma de Pago: </strong> {selectedTx.formaPago} <br/>
-                <strong>Fecha: </strong> {new Date(selectedTx.fecha).toLocaleDateString()}
-              </div>
+              <div style={{
+                  marginBottom: '1.5rem', 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                  gap: '1rem',
+                  background: '#f8fafc',
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div>
+                    <span style={{color: '#64748b', fontSize: '0.85rem', display: 'block', textTransform: 'uppercase'}}>{selectedTx.tipoTransaccion === "VENTA" ? "Cliente" : "Proveedor"}</span>
+                    <strong style={{fontSize: '1rem'}}>{selectedTx.razonSocial}</strong>
+                  </div>
+                  <div>
+                    <span style={{color: '#64748b', fontSize: '0.85rem', display: 'block', textTransform: 'uppercase'}}>NIT / CI</span>
+                    <strong style={{fontSize: '1rem'}}>{selectedTx.nitCi}</strong>
+                  </div>
+                  <div>
+                    <span style={{color: '#64748b', fontSize: '0.85rem', display: 'block', textTransform: 'uppercase'}}>Forma de Pago</span>
+                    <span style={{background: '#e2e8f0', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold'}}>{selectedTx.formaPago}</span>
+                  </div>
+                  <div>
+                    <span style={{color: '#64748b', fontSize: '0.85rem', display: 'block', textTransform: 'uppercase'}}>Fecha</span>
+                    <strong style={{fontSize: '1rem'}}>{new Date(selectedTx.fecha).toLocaleDateString()}</strong>
+                  </div>
+                  {selectedTx.observaciones && (
+                    <div style={{gridColumn: '1 / -1'}}>
+                      <span style={{color: '#64748b', fontSize: '0.85rem', display: 'block', textTransform: 'uppercase'}}>Observaciones</span>
+                      <span style={{fontSize: '0.9rem'}}>{selectedTx.observaciones}</span>
+                    </div>
+                  )}
+                </div>
 
               <table className={styles.tableDetail}>
                 <thead>
@@ -119,7 +146,7 @@ export default function HistorialClient({ transacciones }: { transacciones: any[
                       <td>{d.productoCodigo}</td>
                       <td>{d.producto?.nombre || 'Producto Desconocido'}</td>
                       <td>{d.cantidad}</td>
-                      <td>{d.precioUnitario.toFixed(2)}</td>
+                      <td>{parseFloat(d.precioUnitario.toFixed(5))}</td>
                       <td style={{fontWeight: 'bold'}}>{d.subtotal.toFixed(2)}</td>
                     </tr>
                   ))}
@@ -139,3 +166,4 @@ export default function HistorialClient({ transacciones }: { transacciones: any[
     </div>
   );
 }
+

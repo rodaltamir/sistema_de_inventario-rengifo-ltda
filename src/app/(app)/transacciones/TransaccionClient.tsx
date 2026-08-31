@@ -2,13 +2,14 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ShoppingCart, Download, FileText, Plus, Trash2, Calculator } from "lucide-react";
+import { ShoppingCart, Download, FileText, Plus, Trash2, Calculator, Package, X } from "lucide-react";
 import { procesarTransaccion } from "./actions";
+import { createProducto } from "../productos/actions";
 import { createProveedor } from "../proveedores/actions";
 import Swal from 'sweetalert2';
 import styles from "./transacciones.module.css";
 
-function SearchableProductSelect({ value, onChange, productos }: { value: string, onChange: (val: string) => void, productos: any[] }) {
+function SearchableProductSelect({ value, onChange, productos, onAddNewProduct }: { value: string, onChange: (val: string) => void, productos: any[], onAddNewProduct?: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -91,7 +92,7 @@ function SearchableProductSelect({ value, onChange, productos }: { value: string
           top: coords.top,
           left: coords.left,
           width: Math.max(coords.width, 350),
-          zIndex: 99999,
+          zIndex: 999,
           background: '#fff',
           border: '1px solid #d1d5db',
           borderRadius: '6px',
@@ -115,7 +116,19 @@ function SearchableProductSelect({ value, onChange, productos }: { value: string
           </div>
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {filtered.length === 0 ? (
-              <div style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>No se encontraron productos</div>
+              <div style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
+                No se encontraron productos
+                {onAddNewProduct && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => { setIsOpen(false); setSearch(''); onAddNewProduct(); }} 
+                      style={{ background: 'var(--color-primary)', color: '#fff', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', border: 'none', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                      + Crear Producto
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               filtered.map(p => (
                 <div 
@@ -156,12 +169,124 @@ function SearchableProductSelect({ value, onChange, productos }: { value: string
 }
 
 export default function TransaccionClient({
-  productos,
-  proveedores
+  productos: initialProductos,
+  proveedores: initialProveedores,
+  tenantData,
+  idUser
 }: {
   productos: any[],
-  proveedores: any[]
+  proveedores: any[],
+  tenantData?: any,
+  idUser?: string
 }) {
+  const [productos, setProductos] = useState(initialProductos);
+  const [proveedores, setProveedores] = useState(initialProveedores);
+
+  // Modal Nuevo Producto
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [productLoading, setProductLoading] = useState(false);
+  const [productError, setProductError] = useState("");
+  const [productFormData, setProductFormData] = useState({
+    codigo: "",
+    nombre: "",
+    descripcion: "",
+    marca: "",
+    unidadMedida: "Unidad",
+    metodoInventario: "Promedio Ponderado",
+    proveedorId: "",
+    categoriaId: "",
+    stock: "0",
+    costo: "0.00",
+    precioVenta: "0.00",
+  });
+
+  const handleProductInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setProductFormData({ ...productFormData, [e.target.name]: e.target.value });
+  };
+
+  const calcularDIMProduct = async () => {
+    const { value: formValues } = await Swal.fire({
+      title: '<strong>Calcular DIM</strong>',
+      html: `
+        <div style="text-align: left; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 15px;">
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; text-transform: uppercase;">Importe Total a Pagar</label>
+            <div style="position: relative;">
+              <span style="position: absolute; left: 12px; top: 11px; color: #f97316; font-weight: bold;">Bs.</span>
+              <input id="swal-importe-prod" type="number" step="0.01" placeholder="Ej. 1000" style="width: 100%; padding: 12px 12px 12px 40px; box-sizing: border-box; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; color: #1e293b; outline: none; transition: all 0.2s;" onfocus="this.style.borderColor='#f97316'; this.style.boxShadow='0 0 0 3px rgba(249, 115, 22, 0.1)';" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none';">
+            </div>
+          </div>
+          <div>
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; text-transform: uppercase;">Cantidad / Stock a Ingresar</label>
+            <div style="position: relative;">
+              <span style="position: absolute; left: 12px; top: 11px; color: #f97316;">📦</span>
+              <input id="swal-cantidad-prod" type="number" step="1" placeholder="Ej. 50" style="width: 100%; padding: 12px 12px 12px 40px; box-sizing: border-box; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; color: #1e293b; outline: none; transition: all 0.2s;" onfocus="this.style.borderColor='#f97316'; this.style.boxShadow='0 0 0 3px rgba(249, 115, 22, 0.1)';" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none';">
+            </div>
+          </div>
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonColor: '#f97316',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: '✓ Aplicar Cálculo',
+      cancelButtonText: 'Cancelar',
+      preConfirm: () => {
+        const importe = (document.getElementById('swal-importe-prod') as HTMLInputElement).value;
+        const cantidad = (document.getElementById('swal-cantidad-prod') as HTMLInputElement).value;
+        if (!importe || !cantidad || Number(cantidad) <= 0) {
+          Swal.showValidationMessage('Debe ingresar un importe válido y una cantidad mayor a cero');
+          return false;
+        }
+        return { importe: Number(importe), cantidad: Number(cantidad) };
+      }
+    });
+
+    if (formValues) {
+      const { importe, cantidad } = formValues;
+      const intermedio = importe / 0.13;
+      const precioUnitario = intermedio / cantidad;
+      const parsedPrecio = parseFloat(precioUnitario.toFixed(5));
+
+      setProductFormData(prev => ({
+        ...prev,
+        precioVenta: parsedPrecio.toString()
+      }));
+
+      Swal.fire({
+        title: '¡DIM Aplicado!',
+        html: `
+          <div style="font-size: 1rem; color: #475569; margin-top: 10px;">
+            <p>Se actualizó el Precio de Venta con:</p>
+            <p><strong>Precio Calculado:</strong> Bs. ${parsedPrecio}</p>
+          </div>
+        `,
+        icon: 'success',
+        confirmButtonColor: '#f97316'
+      });
+    }
+  };
+
+  const handleCreateProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProductLoading(true);
+    setProductError("");
+    try {
+      const newProduct = await createProducto({
+        ...productFormData,
+        stock: parseInt(productFormData.stock) || 0,
+        costo: parseFloat(productFormData.costo) || 0,
+        precioVenta: parseFloat(productFormData.precioVenta) || 0,
+      });
+      setProductos([newProduct, ...productos]);
+      setIsProductModalOpen(false);
+      Swal.fire('Éxito', 'Producto creado correctamente', 'success');
+    } catch (err: any) {
+      setProductError(err.message || "Error al crear producto");
+    } finally {
+      setProductLoading(false);
+    }
+  };
   const [modo, setModo] = useState<"VENTA" | "COMPRA">("VENTA");
 
   // General Data
@@ -261,7 +386,7 @@ export default function TransaccionClient({
     if (sinFactura || !nitCi || !razonSocial || nitCi === "0" || razonSocial === "S/N") return;
 
     // Ver si ya existe
-    const exists = proveedores.some(p => p.nit === nitCi);
+    const exists = proveedores.some(p => p.nit === nitCi && p.tipo === (modo === 'VENTA' ? 'CLIENTE' : 'PROVEEDOR'));
     if (exists) return; // Si ya existe, no preguntamos
 
     const tipoContacto = modo === "VENTA" ? "Cliente" : "Proveedor";
@@ -276,12 +401,13 @@ export default function TransaccionClient({
 
     if (result.isConfirmed) {
       try {
-        await createProveedor({
-          nombre: razonSocial,
-          nit: nitCi,
-          tipo: modo === "VENTA" ? "CLIENTE" : "PROVEEDOR",
-          logo: modo === "VENTA" ? "user" : "truck"
-        });
+        const nuevoProv = await createProveedor({
+            nombre: razonSocial,
+            nit: nitCi,
+            tipo: modo === "VENTA" ? "CLIENTE" : "PROVEEDOR",
+            logo: modo === "VENTA" ? "user" : "truck"
+          });
+          setProveedores([...proveedores, nuevoProv]);
         Swal.fire('Guardado', `${tipoContacto} guardado con éxito.`, 'success');
         // NOTA: Para que el nuevo cliente aparezca instantáneamente en la lista actual 
         // sin recargar, tendríamos que actualizar el estado 'proveedores', pero como 
@@ -338,10 +464,10 @@ export default function TransaccionClient({
       const intermedio = importe / 0.13;
       const precioUnitario = intermedio / cantidad;
 
-      // Actualizar la fila correspondiente
-      setDetalles(prev => prev.map(d => {
-        if (d.id === detalleId) {
-          return { ...d, cantidad: cantidad, precioUnitario: precioUnitario.toFixed(2) };
+        // Actualizar la fila correspondiente
+        setDetalles(prev => prev.map(d => {
+          if (d.id === detalleId) {
+            return { ...d, cantidad: cantidad, precioUnitario: parseFloat(precioUnitario.toFixed(5)) };
         }
         return d;
       }));
@@ -546,11 +672,7 @@ export default function TransaccionClient({
                 {detalles.map((d) => (
                   <tr key={d.id}>
                     <td>
-                      <SearchableProductSelect
-                        value={d.productoCodigo}
-                        onChange={(val) => updateDetalle(d.id, "productoCodigo", val)}
-                        productos={productos}
-                      />
+                      <SearchableProductSelect value={d.productoCodigo} onChange={(val) => updateDetalle(d.id, "productoCodigo", val)} productos={productos} onAddNewProduct={modo === 'COMPRA' ? () => { setProductFormData({ ...productFormData, codigo: "", nombre: "", costo: "0.00", precioVenta: "0.00" }); setIsProductModalOpen(true); } : undefined} />
                     </td>
                     <td>
                       <input
@@ -567,7 +689,7 @@ export default function TransaccionClient({
                         className={styles.formInput}
                         value={d.precioUnitario}
                         onChange={(e) => updateDetalle(d.id, "precioUnitario", e.target.value)}
-                        step="0.01"
+                          step="0.00001"
                         min="0"
                       />
                       {modo === "COMPRA" && (
@@ -701,6 +823,84 @@ export default function TransaccionClient({
           </button>
         </div>
       </div>
+    
+      {/* Modal Nuevo Producto */}
+      {isProductModalOpen && (
+        <div className={styles.modalOverlay} style={{ zIndex: 1000, position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className={styles.modalContent} style={{ background: '#fff', borderRadius: '8px', width: '90%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className={styles.modalHeader} style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 className={styles.modalTitle} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.25rem', margin: 0 }}>
+                <Package size={20} /> Nuevo Producto
+              </h2>
+              <button className={styles.closeButton} onClick={() => setIsProductModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateProductSubmit}>
+              <div className={styles.modalBody} style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                {productError && <div style={{ color: 'red', marginBottom: '1rem', fontWeight: 'bold', gridColumn: '1 / -1' }}>{productError}</div>}
+
+                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Código *</label>
+                  <input required type="text" name="codigo" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="PROD-006" value={productFormData.codigo} onChange={handleProductInputChange} />
+                </div>
+                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Nombre *</label>
+                  <input required type="text" name="nombre" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="Nombre del producto" value={productFormData.nombre} onChange={handleProductInputChange} />
+                </div>
+
+                <div className={`${styles.formGroup} ${styles.formGroupFull}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', gridColumn: '1 / -1' }}>
+                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Descripción</label>
+                  <input type="text" name="descripcion" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="Ej: Caramelo duro..." value={productFormData.descripcion} onChange={handleProductInputChange} />
+                </div>
+
+                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Marca</label>
+                  <input type="text" name="marca" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="Ej: Arcor" value={productFormData.marca} onChange={handleProductInputChange} />
+                </div>
+
+                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Stock Inicial *</label>
+                  <input required type="number" min="0" step="1" name="stock" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} value={productFormData.stock} onChange={handleProductInputChange} />
+                </div>
+
+                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Costo (Bs) *</label>
+                  <input required type="number" min="0" step="0.01" name="costo" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} value={productFormData.costo} onChange={handleProductInputChange} />
+                </div>
+                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Precio de Venta (Bs) *</label>
+                      <button type="button" onClick={calcularDIMProduct} style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', borderRadius: '4px', padding: '0.1rem 0.4rem', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                        <Calculator size={12} /> Calc. DIM
+                      </button>
+                    </div>
+                  <input required type="number" min="0" step="0.01" name="precioVenta" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} value={productFormData.precioVenta} onChange={handleProductInputChange} />
+                </div>
+              </div>
+
+              <div className={styles.modalFooter} style={{ padding: '1rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: '#f8fafc', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px' }}>
+                <button type="button" className={styles.btnCancel} style={{ padding: '0.5rem 1rem', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '4px', cursor: 'pointer' }} onClick={() => setIsProductModalOpen(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className={styles.btnSave} style={{ padding: '0.5rem 1rem', border: 'none', background: 'var(--color-primary)', color: '#fff', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }} disabled={productLoading}>
+                  {productLoading ? "Guardando..." : "Guardar Producto"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }
+
+
+
+
+
+
+
+
+
