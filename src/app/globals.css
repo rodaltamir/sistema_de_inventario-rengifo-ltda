@@ -197,7 +197,7 @@ tr:hover td {
 
 .page-container {
   padding: 2.5rem;
-  max-width: 1400px;
+  
   margin: 0 auto;
 }
 
@@ -208,3 +208,4 @@ tr:hover td {
   color: var(--color-text-main);
   letter-spacing: -0.5px;
 }
+

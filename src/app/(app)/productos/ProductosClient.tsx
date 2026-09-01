@@ -425,6 +425,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
               <tr>
                 <th>CÓDIGO</th>
                 <th>NOMBRE</th>
+                  <th>MARCA</th>
                 <th>CATEGORÍA</th>
                 <th>STOCK</th>
                 <th>PRECIO VENTA</th>
@@ -437,8 +438,10 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                 <tr key={p.codigo}>
                   <td style={{ fontWeight: '600' }}>{p.codigo}</td>
                   <td style={{ fontWeight: '600' }}>{p.nombre}</td>
-                  <td>
-                    {p.categoria ? (
+                    <td>{p.marca || '-'}</td>
+                    <td>{p.marca || '-'}</td>
+                    <td>
+                      {p.categoria ? (
                       <span style={{ background: '#f3f4f6', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', color: '#4b5563' }}>
                         {p.categoria.nombre}
                       </span>
@@ -708,7 +711,8 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                   <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                     <th style={{ padding: '0.5rem', textAlign: 'left', minWidth: '120px' }}>CÓDIGO</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', minWidth: '180px' }}>NOMBRE</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left', width: '80px' }}>ENTRADAS</th>
+                      <th style={{ padding: '0.5rem', textAlign: 'left', minWidth: '120px' }}>MARCA</th>
+                      <th style={{ padding: '0.5rem', textAlign: 'left', width: '80px' }}>ENTRADAS</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', width: '80px' }}>SALIDAS</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', width: '80px' }}>SALDO</th>
                     <th style={{ padding: '0.5rem', textAlign: 'left', width: '90px' }}>C. UNIT</th>
@@ -728,16 +732,24 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                         />
                       </td>
                       <td style={{ padding: '0.25rem' }}>
-                        <input
-                          type="text"
-                          value={row.nombre}
-                          onChange={(e) => updatePreviewCell(row.id, 'nombre', e.target.value)}
-                          style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                        />
-                      </td>
-                      <td style={{ padding: '0.25rem' }}>
-                        <input
-                          type="number"
+                          <input
+                            type="text"
+                            value={row.nombre}
+                            onChange={(e) => updatePreviewCell(row.id, 'nombre', e.target.value)}
+                            style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                          />
+                        </td>
+                        <td style={{ padding: '0.25rem' }}>
+                          <input
+                            type="text"
+                            value={row.marca || ''}
+                            onChange={(e) => updatePreviewCell(row.id, 'marca', e.target.value)}
+                            style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                          />
+                        </td>
+                        <td style={{ padding: '0.25rem' }}>
+                          <input
+                            type="number"
                           value={row.entradaCant}
                           onChange={(e) => updatePreviewCell(row.id, 'entradaCant', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
@@ -928,6 +940,10 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     </>
   );
 }
+
+
+
+
 
 
 

@@ -151,3 +151,4 @@ export default function SearchableProductSelect({ value, onChange, productos }: 
     </div>
   );
 }
+
