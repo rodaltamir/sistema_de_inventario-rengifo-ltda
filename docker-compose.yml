@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: admin_inventario
       POSTGRES_PASSWORD: "SecureDB_Inv_2026!#"
       POSTGRES_DB: inventario_master_db
-    # Removido el mapeo de puertos 5432:5432 hacia el host para evitar conflictos con otros proyectos
+    # Removido el mapeo de puertos 5432:5432 hacia el host para evitar conflictos con otros proyectos haci para tener mayor escalabilidad
     volumes:
       - pgdata:/var/lib/postgresql/data
 
