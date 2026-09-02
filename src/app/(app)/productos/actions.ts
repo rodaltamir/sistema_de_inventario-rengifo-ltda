@@ -185,7 +185,7 @@ export async function importProductos(productos: any[], descripcion?: string, im
   const desc = descripcion || `Importación Histórica ${importYear || ""}`.trim();
   
   // Utilizar UTC a mediodía para evitar que la conversión de zonas horarias retrase la fecha al año anterior (ej. 31/12/2024 en vez de 01/01/2025)
-  const yearDateStart = importYear ? new Date(Date.UTC(importYear, 0, 2, 12, 0, 0)) : new Date();
+  const yearDateStart = importYear ? new Date(Date.UTC(importYear, 11, 30, 12, 0, 0)) : new Date();
   const yearDateEnd = importYear ? new Date(Date.UTC(importYear, 11, 30, 12, 0, 0)) : new Date();
 
   // 1. Transaction for COMPRAS (Entradas)
@@ -200,6 +200,7 @@ export async function importProductos(productos: any[], descripcion?: string, im
         observaciones: desc,
         formaPago: "NINGUNO",
         fecha: yearDateStart,
+        createdAt: yearDateStart,
         detalles: {
           create: compras.map(p => {
             const qty = parseInt(p.entradaCant) || 0;
@@ -228,6 +229,7 @@ export async function importProductos(productos: any[], descripcion?: string, im
         observaciones: desc,
         formaPago: "NINGUNO",
         fecha: yearDateEnd,
+        createdAt: yearDateEnd,
         detalles: {
           create: ventas.map(p => {
             const qty = parseInt(p.salidaCant) || 0;
@@ -247,3 +249,5 @@ export async function importProductos(productos: any[], descripcion?: string, im
   revalidatePath("/productos");
   return productos.length;
 }
+
+

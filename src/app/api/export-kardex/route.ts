@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     // Unir celdas B a E para la informacion de la empresa para evitar recortes
     ['1', '2', '3', '4', '5', '6'].forEach(rowNum => {
       try { worksheet.mergeCells(`B${rowNum}:E${rowNum}`); } catch(e) {}
-      worksheet.getCell(`B${rowNum}`).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      worksheet.getCell(`B${rowNum}`).alignment = { ...worksheet.getCell(`B${rowNum}`).alignment,  horizontal: 'center', vertical: 'middle', wrapText: true  };
     });
 
     // Fechas Formato
@@ -109,7 +109,24 @@ export async function POST(req: Request) {
       return `${d}/${m}/${y}`;
     };
 
-    if (isResumen) {
+    
+      if (isResumen) {
+        let maxNombre = 15;
+        let maxMarca = 10;
+        let maxDesc = 15;
+        
+        resumenRows.forEach((r: any) => {
+          if (r.nombre && r.nombre.length > maxNombre) maxNombre = r.nombre.length;
+          if (r.marca && r.marca.length > maxMarca) maxMarca = r.marca.length;
+          if (r.descripcion && r.descripcion.length > maxDesc) maxDesc = r.descripcion.length;
+        });
+        
+        // Usar anchos ligeramente ajustados para que no sean exagerados.
+        // La responsividad principal la haremos con el alto de la fila.
+        worksheet.getColumn('B').width = 18; // Default ancho base
+        worksheet.getColumn('E').width = Math.max(12, Math.min(maxMarca + 2, 25));
+        worksheet.getColumn('F').width = 18; 
+
       // ===== LOGICA PARA RESUMEN GENERAL O CATEGORIA =====
       const fechaTexto = `DEL ${formatDate(fechaDesde) || '(INICIO)'} AL ${formatDate(fechaHasta) || '(ACTUALIDAD)'}`;
       worksheet.getCell('G3').value = fechaTexto;
@@ -139,22 +156,38 @@ export async function POST(req: Request) {
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           const styleCell = styleRow.getCell(colNumber);
           if (styleCell && styleCell.style) {
-            cell.style = JSON.parse(JSON.stringify(styleCell.style));
+            cell.style = { ...styleCell.style };
           }
         });
         
         row.getCell('A').value = r.codigo;
         try {
-          worksheet.mergeCells(`B${currentRow}:E${currentRow}`);
+          worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
         } catch(e) { /* Ignore if already merged */ }
         row.getCell('B').value = r.nombre;
+          row.getCell('E').value = r.marca || '-';
         
         try {
           worksheet.mergeCells(`F${currentRow}:H${currentRow}`);
         } catch(e) { /* Ignore */ }
         row.getCell('F').value = r.descripcion;
-        
-        row.getCell('I').value = r.unidad;
+
+          // Auto-ajuste manual de la altura de la fila
+          let lines = 1;
+          if (r.nombre && r.nombre.length > 55) {
+              lines = Math.max(lines, Math.ceil(r.nombre.length / 55));
+          }
+          if (r.descripcion && r.descripcion.length > 55) {
+              lines = Math.max(lines, Math.ceil(r.descripcion.length / 55));
+          }
+          if (r.marca && r.marca.length > 25) {
+              lines = Math.max(lines, Math.ceil(r.marca.length / 25));
+          }
+          
+          if (lines > 1) {
+              row.height = 15 * lines;
+          }
+row.getCell('I').value = r.unidad;
         
         row.getCell('J').value = r.entradas > 0 ? Number(r.entradas) : '-';
         const puEntrada = r.entradas > 0 ? (r.entradasBs / r.entradas) : 0;
@@ -172,13 +205,13 @@ export async function POST(req: Request) {
         });
 
         if (conImportes) {
-           row.getCell('K').value = puEntrada > 0 ? Number(puEntrada.toFixed(2)) : '-';
-           row.getCell('L').value = r.entradasBs > 0 ? Number(r.entradasBs.toFixed(2)) : '-';
+           row.getCell('K').value = puEntrada > 0 ? Number(puEntrada.toFixed(6)) : '-';
+           row.getCell('L').value = r.entradasBs > 0 ? Number(r.entradasBs.toFixed(6)) : '-';
            
-           row.getCell('N').value = puSalida > 0 ? Number(puSalida.toFixed(2)) : '-';
-           row.getCell('O').value = r.salidasBs > 0 ? Number(r.salidasBs.toFixed(2)) : '-';
+           row.getCell('N').value = puSalida > 0 ? Number(puSalida.toFixed(6)) : '-';
+           row.getCell('O').value = r.salidasBs > 0 ? Number(r.salidasBs.toFixed(6)) : '-';
            
-           row.getCell('Q').value = Number(r.saldoBs.toFixed(2));
+           row.getCell('Q').value = Number(r.saldoBs.toFixed(6));
 
            // Formats
            ['K', 'L', 'N', 'O', 'Q'].forEach(col => {
@@ -193,7 +226,7 @@ export async function POST(req: Request) {
         }
 
         // Borders and alignment
-        ['A','B','I','J','K','L','M','N','O','P','Q'].forEach(col => {
+        ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q'].forEach(col => {
            const cell = row.getCell(col);
            cell.border = {
              top: {style:'thin'},
@@ -201,9 +234,9 @@ export async function POST(req: Request) {
              bottom: {style:'thin'},
              right: {style:'thin'}
            };
-           cell.alignment = { vertical: 'middle', horizontal: 'center' };
+           cell.alignment = { ...cell.alignment, vertical: 'middle', horizontal: 'center' };
         });
-        row.getCell('B').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+        row.getCell('B').alignment = { ...row.getCell('B').alignment,  vertical: 'middle', horizontal: 'left', wrapText: true  };
 
         row.commit();
         currentRow++;
@@ -218,7 +251,7 @@ export async function POST(req: Request) {
         finalRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           const styleCell = styleRow.getCell(colNumber);
           if (styleCell && styleCell.style) {
-            cell.style = JSON.parse(JSON.stringify(styleCell.style));
+            cell.style = { ...styleCell.style };
           }
         });
 
@@ -226,8 +259,8 @@ export async function POST(req: Request) {
           worksheet.mergeCells(`B${currentRow}:I${currentRow}`);
         } catch(e) { /* Ignore */ }
         finalRow.getCell('B').value = 'TOTALES';
-        finalRow.getCell('B').font = { bold: true };
-        finalRow.getCell('B').alignment = { horizontal: 'right', vertical: 'middle' };
+        finalRow.getCell('B').font = { ...finalRow.getCell('B').font,  bold: true  };
+        finalRow.getCell('B').alignment = { ...finalRow.getCell('B').alignment,  horizontal: 'right', vertical: 'middle'  };
 
         let totEntCant = 0, totEntBs = 0;
         let totSalCant = 0, totSalBs = 0;
@@ -252,20 +285,20 @@ export async function POST(req: Request) {
 
         if (conImportes) {
           finalRow.getCell('K').value = '-';
-          finalRow.getCell('L').value = Number(totEntBs.toFixed(2));
+          finalRow.getCell('L').value = Number(totEntBs.toFixed(6));
           finalRow.getCell('L').numFmt = '#,##0.00';
 
           finalRow.getCell('N').value = '-';
-          finalRow.getCell('O').value = Number(totSalBs.toFixed(2));
+          finalRow.getCell('O').value = Number(totSalBs.toFixed(6));
           finalRow.getCell('O').numFmt = '#,##0.00';
 
-          finalRow.getCell('Q').value = Number(totSaldoBs.toFixed(2));
+          finalRow.getCell('Q').value = Number(totSaldoBs.toFixed(6));
           finalRow.getCell('Q').numFmt = '#,##0.00';
         }
 
         ['J','K','L','M','N','O','P','Q'].forEach(col => {
-           finalRow.getCell(col).font = { bold: true };
-           finalRow.getCell(col).alignment = { horizontal: 'center', vertical: 'middle' };
+           finalRow.getCell(col).font = { ...finalRow.getCell(col).font,  bold: true  };
+           finalRow.getCell(col).alignment = { ...finalRow.getCell(col).alignment,  horizontal: 'center', vertical: 'middle'  };
            finalRow.getCell(col).border = {
              top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'}
            };
@@ -278,33 +311,33 @@ export async function POST(req: Request) {
       worksheet.getCell('E5').value = fechaTexto;
 
       worksheet.getCell('L11').value = 'UNIDAD DE MEDIDA:';
-      worksheet.getCell('L11').font = { bold: true, size: 9 };
+      worksheet.getCell('L11').font = { ...worksheet.getCell('L11').font,  bold: true, size: 9  };
       
       // Removed CATEGORÍA override which messed with template.
       
       if (productoSeleccionado) {
         worksheet.getCell('B9').value = 'MÉTODO DE INVENTARIO:';
-        worksheet.getCell('B9').font = { bold: true };
+        worksheet.getCell('B9').font = { ...worksheet.getCell('B9').font,  bold: true  };
         
         worksheet.getCell('D9').value = productoSeleccionado.metodoInventario || 'Promedio Ponderado';
-        worksheet.getCell('D9').font = { bold: false };
+        worksheet.getCell('D9').font = { ...worksheet.getCell('D9').font,  bold: false  };
         
         worksheet.getCell('G9').value = productoSeleccionado.nombre;
-        worksheet.getCell('G9').font = { bold: false };
-        worksheet.getCell('G9').alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' };
+        worksheet.getCell('G9').font = { ...worksheet.getCell('G9').font,  bold: false  };
+        worksheet.getCell('G9').alignment = { ...worksheet.getCell('G9').alignment,  wrapText: true, vertical: 'middle', horizontal: 'center'  };
         
         worksheet.getCell('N9').value = productoSeleccionado.marca || 'S/M';
-        worksheet.getCell('N9').font = { bold: false };
+        worksheet.getCell('N9').font = { ...worksheet.getCell('N9').font,  bold: false  };
         
         worksheet.getCell('C11').value = productoSeleccionado.codigo;
-        worksheet.getCell('C11').font = { bold: false };
+        worksheet.getCell('C11').font = { ...worksheet.getCell('C11').font,  bold: false  };
         
         worksheet.getCell('G11').value = productoSeleccionado.descripcion || '';
-        worksheet.getCell('G11').font = { bold: false };
-        worksheet.getCell('G11').alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' };
+        worksheet.getCell('G11').font = { ...worksheet.getCell('G11').font,  bold: false  };
+        worksheet.getCell('G11').alignment = { ...worksheet.getCell('G11').alignment,  wrapText: true, vertical: 'middle', horizontal: 'center'  };
         
         worksheet.getCell('N11').value = productoSeleccionado.unidadMedida || 'Unidad';
-        worksheet.getCell('N11').font = { bold: false };
+        worksheet.getCell('N11').font = { ...worksheet.getCell('N11').font,  bold: false  };
         
         worksheet.getCell('C12').value = ''; // Eliminar categoría
         worksheet.getCell('B12').value = ''; // Eliminar label CATEGORIA:
@@ -339,7 +372,7 @@ export async function POST(req: Request) {
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           const styleCell = styleRow.getCell(colNumber);
           if (styleCell && styleCell.style) {
-            cell.style = JSON.parse(JSON.stringify(styleCell.style));
+            cell.style = { ...styleCell.style };
           }
         });
 
@@ -370,8 +403,8 @@ export async function POST(req: Request) {
         if (conImportes) {
           // Entradas P/U y Total
           if (mov.entradas > 0 || mov.movimiento === 'SALDO INICIAL') {
-            row.getCell('H').value = mov.precioUnitario > 0 ? Number(Number(mov.precioUnitario).toFixed(2)) : '-';
-            row.getCell('I').value = mov.ingresoBs > 0 ? Number(Number(mov.ingresoBs).toFixed(2)) : '-';
+            row.getCell('H').value = mov.precioUnitario > 0 ? Number(Number(mov.precioUnitario).toFixed(6)) : '-';
+            row.getCell('I').value = mov.ingresoBs > 0 ? Number(Number(mov.ingresoBs).toFixed(6)) : '-';
           } else {
             row.getCell('H').value = '-';
             row.getCell('I').value = '-';
@@ -381,8 +414,8 @@ export async function POST(req: Request) {
           if (mov.salidas > 0) {
             // Calculate output unit price or use existing
             const puSalida = mov.salidas > 0 ? (mov.egresoBs / mov.salidas) : 0;
-            row.getCell('K').value = puSalida > 0 ? Number(Number(puSalida).toFixed(2)) : '-';
-            row.getCell('L').value = mov.egresoBs > 0 ? Number(Number(mov.egresoBs).toFixed(2)) : '-';
+            row.getCell('K').value = puSalida > 0 ? Number(Number(puSalida).toFixed(6)) : '-';
+            row.getCell('L').value = mov.egresoBs > 0 ? Number(Number(mov.egresoBs).toFixed(6)) : '-';
           } else {
             row.getCell('K').value = '-';
             row.getCell('L').value = '-';
@@ -390,7 +423,7 @@ export async function POST(req: Request) {
           
           // Saldo Total
           if (mov.saldoBs !== undefined) {
-            row.getCell('N').value = Number(Number(mov.saldoBs).toFixed(2));
+            row.getCell('N').value = Number(Number(mov.saldoBs).toFixed(6));
           } else {
             row.getCell('N').value = '-';
           }
@@ -431,11 +464,11 @@ export async function POST(req: Request) {
              right: {style:'thin'}
            };
            if (['G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'].includes(col)) {
-               cell.font = { bold: true, size: 8 };
+               cell.font = { ...cell.font, bold: true, size: 10 };
            } else {
-               cell.font = { bold: false, size: 8 };
+               cell.font = { ...cell.font, bold: false, size: 10 };
            }
-           cell.alignment = { vertical: 'middle', horizontal: 'center' };
+           cell.alignment = { ...cell.alignment, vertical: 'middle', horizontal: 'center' };
         });
 
         row.commit();
@@ -450,7 +483,7 @@ export async function POST(req: Request) {
         finalRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           const styleCell = styleRow.getCell(colNumber);
           if (styleCell && styleCell.style) {
-            cell.style = JSON.parse(JSON.stringify(styleCell.style));
+            cell.style = { ...styleCell.style };
           }
         });
         
@@ -473,41 +506,41 @@ export async function POST(req: Request) {
         // Merge first columns
         try { worksheet.mergeCells(`B${currentRow}:F${currentRow}`); } catch(e) {}
         finalRow.getCell('B').value = 'TOTALES';
-        finalRow.getCell('B').font = { bold: true };
-        finalRow.getCell('B').alignment = { horizontal: 'right', vertical: 'middle' };
+        finalRow.getCell('B').font = { ...finalRow.getCell('B').font,  bold: true  };
+        finalRow.getCell('B').alignment = { ...finalRow.getCell('B').alignment,  horizontal: 'right', vertical: 'middle'  };
 
         // Fill Cantidad totals
         finalRow.getCell('G').value = totEntCant > 0 ? totEntCant : '-';
-        finalRow.getCell('G').font = { bold: true };
-        finalRow.getCell('G').alignment = { horizontal: 'center', vertical: 'middle' };
+        finalRow.getCell('G').font = { ...finalRow.getCell('G').font,  bold: true  };
+        finalRow.getCell('G').alignment = { ...finalRow.getCell('G').alignment,  horizontal: 'center', vertical: 'middle'  };
         if (totEntCant > 0) finalRow.getCell('G').numFmt = '#,##0';
 
         finalRow.getCell('J').value = totSalCant > 0 ? totSalCant : '-';
-        finalRow.getCell('J').font = { bold: true };
-        finalRow.getCell('J').alignment = { horizontal: 'center', vertical: 'middle' };
+        finalRow.getCell('J').font = { ...finalRow.getCell('J').font,  bold: true  };
+        finalRow.getCell('J').alignment = { ...finalRow.getCell('J').alignment,  horizontal: 'center', vertical: 'middle'  };
         if (totSalCant > 0) finalRow.getCell('J').numFmt = '#,##0';
 
         if (conImportes) {
           finalRow.getCell('H').value = '-';
-          finalRow.getCell('I').value = totEntBs > 0 ? Number(totEntBs.toFixed(2)) : '-';
+          finalRow.getCell('I').value = totEntBs > 0 ? Number(totEntBs.toFixed(6)) : '-';
           finalRow.getCell('I').numFmt = '#,##0.00';
           
           finalRow.getCell('K').value = '-';
-          finalRow.getCell('L').value = totSalBs > 0 ? Number(totSalBs.toFixed(2)) : '-';
+          finalRow.getCell('L').value = totSalBs > 0 ? Number(totSalBs.toFixed(6)) : '-';
           finalRow.getCell('L').numFmt = '#,##0.00';
           
           finalRow.getCell('M').value = '-';
-          finalRow.getCell('N').value = Number(Number(movimientosList[movimientosList.length - 1].saldoBs).toFixed(2));
+          finalRow.getCell('N').value = Number(Number(movimientosList[movimientosList.length - 1].saldoBs).toFixed(6));
           finalRow.getCell('N').numFmt = '#,##0.00';
           
           ['H','I','K','L','M','N'].forEach(c => {
-             finalRow.getCell(c).font = { bold: true };
-             finalRow.getCell(c).alignment = { horizontal: 'center', vertical: 'middle' };
+             finalRow.getCell(c).font = { ...finalRow.getCell(c).font,  bold: true  };
+             finalRow.getCell(c).alignment = { ...finalRow.getCell(c).alignment,  horizontal: 'center', vertical: 'middle'  };
           });
         } else {
           finalRow.getCell('M').value = movimientosList[movimientosList.length - 1].saldoFisico;
-          finalRow.getCell('M').font = { bold: true };
-          finalRow.getCell('M').alignment = { horizontal: 'center', vertical: 'middle' };
+          finalRow.getCell('M').font = { ...finalRow.getCell('M').font,  bold: true  };
+          finalRow.getCell('M').alignment = { ...finalRow.getCell('M').alignment,  horizontal: 'center', vertical: 'middle'  };
           finalRow.getCell('M').numFmt = '#,##0';
         }
         
@@ -520,7 +553,21 @@ export async function POST(req: Request) {
 
     const buffer = await workbook.xlsx.writeBuffer();
     
-    // Generar nombre de archivo
+    
+     // ESTANDARIZAR TIPOGRAFIA (ARIAL 10) Y RESPONSIVIDAD (WRAP TEXT)
+      worksheet.eachRow({ includeEmpty: true }, (row) => {
+        row.eachCell({ includeEmpty: true }, (cell) => {
+           const currentFont = cell.font || {};
+           cell.font = { ...currentFont, name: 'Aptos Narrow', size: 11 };
+           
+           const currentAlignment = cell.alignment || {};
+           cell.alignment = { ...currentAlignment, wrapText: true, vertical: 'middle' };
+        });
+      });
+      
+      // Generar nombre de archivo
+      // Generar nombre de archivo
+
     const now = new Date();
     const formattedDate = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
     let fileName = 'kardex_';

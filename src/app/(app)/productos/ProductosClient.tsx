@@ -283,8 +283,11 @@ export default function ProductosClient({ initialProductos, proveedores, initial
         const entradaCosto = parseNum(rawEntradaCosto);
         const salidaCosto = parseNum(rawSalidaCosto);
 
-        const costoUnitario = entradaCant > 0 ? (entradaCosto / entradaCant).toFixed(2) : "0.00";
-        const precioVentaUnitario = salidaCant > 0 ? (salidaCosto / salidaCant).toFixed(2) : "0.00";
+        const costoUnitarioCalc = entradaCant > 0 ? (entradaCosto / entradaCant) : 0;
+          const costoUnitario = String(Math.round(costoUnitarioCalc * 1e6) / 1e6);
+          
+          const precioVentaCalc = salidaCant > 0 ? (salidaCosto / salidaCant) : 0;
+          const precioVentaUnitario = String(Math.round(precioVentaCalc * 1e6) / 1e6);
 
         imported.push({
           id: Date.now() + Math.random(), // id temporal para la UI
@@ -439,7 +442,6 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                   <td style={{ fontWeight: '600' }}>{p.codigo}</td>
                   <td style={{ fontWeight: '600' }}>{p.nombre}</td>
                     <td>{p.marca || '-'}</td>
-                    <td>{p.marca || '-'}</td>
                     <td>
                       {p.categoria ? (
                       <span style={{ background: '#f3f4f6', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', color: '#4b5563' }}>
@@ -457,7 +459,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                       {p.stock} {p.unidadMedida}
                     </span>
                   </td>
-                  <td>Bs. {p.precioVenta.toFixed(2)}</td>
+                  <td>Bs. {p.precioVenta.toFixed(6).replace(/\.?0+$/, "")}</td>
                   <td>{p.proveedor?.nombre || '-'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -940,6 +942,8 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     </>
   );
 }
+
+
 
 
 

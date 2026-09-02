@@ -98,7 +98,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       .filter(m => validProductIds.has(m.productoCodigo))
       .filter(m => pFiltro === "TODOS" || m.productoCodigo === pFiltro)
       .filter(m => mFiltro === "TODOS" || m.transaccion.tipoTransaccion === mFiltro)
-      .sort((a, b) => new Date(a.transaccion.createdAt).getTime() - new Date(b.transaccion.createdAt).getTime());
+      .sort((a, b) => new Date(a.transaccion.fecha).getTime() - new Date(b.transaccion.fecha).getTime());
 
     let saldoInicialFisico = 0;
       let saldoInicialValorado = 0;
@@ -124,6 +124,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       resumenMap.set(p.codigo, {
           codigo: p.codigo,
           nombre: p.nombre,
+            marca: p.marca || '-',
           descripcion: p.descripcion || '-',
           unidad: p.unidadMedida || 'Unidad',
           metodoInventario: p.metodoInventario || 'Promedio Ponderado',
@@ -141,7 +142,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     filteredMovs.forEach(m => {
       const isImportacion = m.transaccion.tipoTransaccion === 'SALDO INICIAL' || m.transaccion.tipoTransaccion === 'IMPORTACIÓN INICIAL';
       const isCompra = isImportacion || m.transaccion.tipoTransaccion === 'COMPRA' || m.transaccion.tipoTransaccion === 'ENTRADA';
-      const date = new Date(m.transaccion.createdAt);
+      const date = new Date(m.transaccion.fecha);
       
       const costoMovimiento = isCompra ? m.subtotal : (m.cantidad * m.producto.costo);
 
@@ -247,7 +248,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       }
     });
 
-    const resumenRows = Array.from(resumenMap.values()).filter(r => r.entradas > 0 || r.salidas > 0 || r.saldo !== 0 || r.saldoInicial !== 0);
+    const resumenRows = Array.from(resumenMap.values()).filter(r => r.entradas > 0 || r.salidas > 0);
 
     return { rows, resumenRows, saldoInicialFisico, saldoInicialValorado, saldoInicialEntFisico, saldoInicialSalFisico, saldoInicialEntValorado, saldoInicialSalValorado, totalEntradas, totalSalidas, hasImportacion, importacionDesc };
   }, [movimientos, appliedFilters, productos]);
@@ -398,14 +399,14 @@ export default function KardexClient({ initialMovimientos, productos, categorias
           totSalCant += r.salidas; totSalBs += r.salidasBs;
           totSaldoCant += r.saldo; totSaldoBs += r.saldoBs;
 
-          const puEntrada = r.entradas > 0 ? (r.entradasBs / r.entradas).toFixed(2) : '-';
-          const puSalida = r.salidas > 0 ? (r.salidasBs / r.salidas).toFixed(2) : '-';
+          const puEntrada = r.entradas > 0 ? (r.entradasBs / r.entradas).toFixed(6).replace(/\.?0+$/, "") : '-';
+          const puSalida = r.salidas > 0 ? (r.salidasBs / r.salidas).toFixed(6).replace(/\.?0+$/, "") : '-';
 
           body.push([
             r.codigo, r.descripcion, r.unidad,
-            r.entradas || '-', puEntrada, r.entradasBs ? r.entradasBs.toFixed(2) : '-',
-            r.salidas || '-', puSalida, r.salidasBs ? r.salidasBs.toFixed(2) : '-',
-            r.saldo || '-', r.saldoBs ? r.saldoBs.toFixed(2) : '-'
+            r.entradas || '-', puEntrada, r.entradasBs ? r.entradasBs.toFixed(6).replace(/\.?0+$/, "") : '-',
+            r.salidas || '-', puSalida, r.salidasBs ? r.salidasBs.toFixed(6).replace(/\.?0+$/, "") : '-',
+            r.saldo || '-', r.saldoBs ? r.saldoBs.toFixed(6).replace(/\.?0+$/, "") : '-'
           ]);
         });
 
@@ -414,12 +415,12 @@ export default function KardexClient({ initialMovimientos, productos, categorias
              { content: 'TOTALES', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } as any },
              { content: totEntCant.toString(), styles: { fontStyle: 'bold' } as any },
              { content: '-', styles: { fontStyle: 'bold', halign: 'center' } as any },
-             { content: totEntBs.toFixed(2), styles: { fontStyle: 'bold' } as any },
+             { content: totEntBs.toFixed(6).replace(/\.?0+$/, ""), styles: { fontStyle: 'bold' } as any },
              { content: totSalCant.toString(), styles: { fontStyle: 'bold' } as any },
              { content: '-', styles: { fontStyle: 'bold', halign: 'center' } as any },
-             { content: totSalBs.toFixed(2), styles: { fontStyle: 'bold' } as any },
+             { content: totSalBs.toFixed(6).replace(/\.?0+$/, ""), styles: { fontStyle: 'bold' } as any },
              { content: totSaldoCant.toString(), styles: { fontStyle: 'bold' } as any },
-             { content: totSaldoBs.toFixed(2), styles: { fontStyle: 'bold' } as any }
+             { content: totSaldoBs.toFixed(6).replace(/\.?0+$/, ""), styles: { fontStyle: 'bold' } as any }
            ]);
         }
       } else {
@@ -504,7 +505,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
             '-', '-', '-', 
             '-', '-', '-', 
             kardexData.saldoInicialFisico.toString(),
-            kardexData.saldoInicialValorado.toFixed(2)
+            kardexData.saldoInicialValorado.toFixed(6).replace(/\.?0+$/, "")
           );
         } else {
           rowData.push(
@@ -538,13 +539,13 @@ export default function KardexClient({ initialMovimientos, productos, categorias
         if (conImportes) {
           rowData.push(
             r.entradas ? r.entradas.toString() : '-',
-            r.entradas ? (r.precioUnitario ? Number(r.precioUnitario).toFixed(2) : '-') : '-',
-            r.ingresoBs ? Number(r.ingresoBs).toFixed(2) : '-',
+            r.entradas ? (r.precioUnitario ? Number(r.precioUnitario).toFixed(6).replace(/\.?0+$/, "") : '-') : '-',
+            r.ingresoBs ? Number(r.ingresoBs).toFixed(6).replace(/\.?0+$/, "") : '-',
             r.salidas ? r.salidas.toString() : '-',
-            r.salidas ? (r.precioUnitario ? Number(r.precioUnitario).toFixed(2) : '-') : '-',
-            r.egresoBs ? Number(r.egresoBs).toFixed(2) : '-',
+            r.salidas ? (r.precioUnitario ? Number(r.precioUnitario).toFixed(6).replace(/\.?0+$/, "") : '-') : '-',
+            r.egresoBs ? Number(r.egresoBs).toFixed(6).replace(/\.?0+$/, "") : '-',
             r.saldoFisico.toString(),
-            Number(r.saldoBs).toFixed(2)
+            Number(r.saldoBs).toFixed(6).replace(/\.?0+$/, "")
           );
         } else {
           rowData.push(
@@ -562,12 +563,12 @@ export default function KardexClient({ initialMovimientos, productos, categorias
             { content: 'TOTALES', colSpan: 6, styles: { fontStyle: 'bold', halign: 'right' } as any },
             { content: totEntradas > 0 ? totEntradas.toString() : '-', styles: { fontStyle: 'bold' } as any },
             { content: '-', styles: { fontStyle: 'bold', halign: 'center' } as any },
-            { content: totEntradasBs > 0 ? totEntradasBs.toFixed(2) : '-', styles: { fontStyle: 'bold' } as any },
+            { content: totEntradasBs > 0 ? totEntradasBs.toFixed(6).replace(/\.?0+$/, "") : '-', styles: { fontStyle: 'bold' } as any },
             { content: totSalidas > 0 ? totSalidas.toString() : '-', styles: { fontStyle: 'bold' } as any },
             { content: '-', styles: { fontStyle: 'bold', halign: 'center' } as any },
-            { content: totSalidasBs > 0 ? totSalidasBs.toFixed(2) : '-', styles: { fontStyle: 'bold' } as any },
+            { content: totSalidasBs > 0 ? totSalidasBs.toFixed(6).replace(/\.?0+$/, "") : '-', styles: { fontStyle: 'bold' } as any },
             { content: '-', styles: { fontStyle: 'bold', halign: 'center' } as any },
-            { content: lastValorado.toFixed(2), styles: { fontStyle: 'bold' } as any }
+            { content: lastValorado.toFixed(6).replace(/\.?0+$/, ""), styles: { fontStyle: 'bold' } as any }
           ]);
         } else {
           body.push([
@@ -699,8 +700,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
                 <option value="TODOS">-- TODOS --</option>
                 <option value="VENTA">VENTAS</option>
                 <option value="COMPRA">COMPRAS</option>
-                <option value="SALDO INICIAL">SALDO INICIAL / IMPORTACIÓN</option>
-                <option value="ENTRADA">OTRAS ENTRADAS</option>
+                
               </select>
             </div>
 
@@ -825,13 +825,13 @@ export default function KardexClient({ initialMovimientos, productos, categorias
             .compact-table {
               }
             .compact-table th {
-              padding: 0.5rem 0.5rem !important;
-              white-space: nowrap;
-            }
-            .compact-table td {
-              padding: 0.5rem 0.5rem !important;
-              white-space: nowrap;
-            }
+                padding: 0.25rem 0.2rem !important;
+                white-space: nowrap;
+              }
+              .compact-table td {
+                padding: 0.25rem 0.2rem !important;
+                white-space: nowrap;
+              }
             .col-number {
               white-space: nowrap;
             }
@@ -843,7 +843,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
             }
           `}</style>
           {isTodos ? (
-            <table className="compact-table" style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.75rem', tableLayout: 'auto' }}>
+            <table className="compact-table" style={{ borderCollapse: 'collapse', width: '100%', fontSize: conImportes ? '0.65rem' : '0.75rem', tableLayout: 'auto' }}>
               <thead>
                 {conImportes ? (
                   <>
@@ -883,8 +883,8 @@ export default function KardexClient({ initialMovimientos, productos, categorias
               </thead>
               <tbody>
                 {kardexData.resumenRows.map((r) => {
-                  const puEntrada = r.entradas > 0 ? (r.entradasBs / r.entradas).toFixed(2) : '-';
-                  const puSalida = r.salidas > 0 ? (r.salidasBs / r.salidas).toFixed(2) : '-';
+                  const puEntrada = r.entradas > 0 ? (r.entradasBs / r.entradas).toFixed(6).replace(/\.?0+$/, "") : '-';
+                  const puSalida = r.salidas > 0 ? (r.salidasBs / r.salidas).toFixed(6).replace(/\.?0+$/, "") : '-';
 
                   return (
                     <tr key={r.codigo}>
@@ -897,14 +897,14 @@ export default function KardexClient({ initialMovimientos, productos, categorias
                             <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{r.saldoInicial || '-'}</td>
                           <td style={{ textAlign: 'center', color: 'var(--color-success)', fontWeight: 'bold' }}>{r.entradas || '-'}</td>
                           <td style={{ textAlign: 'right' }}>{puEntrada}</td>
-                          <td style={{ textAlign: 'right' }}>{r.entradasBs ? r.entradasBs.toFixed(2) : '-'}</td>
+                          <td style={{ textAlign: 'right' }}>{r.entradasBs ? r.entradasBs.toFixed(6).replace(/\.?0+$/, "") : '-'}</td>
                           
                           <td style={{ textAlign: 'center', color: 'var(--color-danger)', fontWeight: 'bold' }}>{r.salidas || '-'}</td>
                           <td style={{ textAlign: 'right' }}>{puSalida}</td>
-                          <td style={{ textAlign: 'right' }}>{r.salidasBs ? r.salidasBs.toFixed(2) : '-'}</td>
+                          <td style={{ textAlign: 'right' }}>{r.salidasBs ? r.salidasBs.toFixed(6).replace(/\.?0+$/, "") : '-'}</td>
                           
                           <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{r.saldo || '-'}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{r.saldoBs ? r.saldoBs.toFixed(2) : '-'}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{r.saldoBs ? r.saldoBs.toFixed(6).replace(/\.?0+$/, "") : '-'}</td>
                         </>
                       ) : (
                           <>
@@ -947,11 +947,11 @@ export default function KardexClient({ initialMovimientos, productos, categorias
                           <>
                             <td style={{ textAlign: 'center' }}>{totSaldoIniCant}</td>
                             <td style={{ textAlign: 'center' }}>{totEntCant}</td>
-                            <td style={{ textAlign: 'right' }}>{totEntBs.toFixed(2)}</td>
+                            <td style={{ textAlign: 'right' }}>{totEntBs.toFixed(6).replace(/\.?0+$/, "")}</td>
                             <td style={{ textAlign: 'center' }}>{totSalCant}</td>
-                            <td style={{ textAlign: 'right' }}>{totSalBs.toFixed(2)}</td>
+                            <td style={{ textAlign: 'right' }}>{totSalBs.toFixed(6).replace(/\.?0+$/, "")}</td>
                             <td style={{ textAlign: 'center' }}>{totSaldoCant}</td>
-                            <td style={{ textAlign: 'right' }}>{totSaldoBs.toFixed(2)}</td>
+                            <td style={{ textAlign: 'right' }}>{totSaldoBs.toFixed(6).replace(/\.?0+$/, "")}</td>
                           </>
                       ) : (
                           <>
@@ -967,7 +967,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
               </tbody>
             </table>
           ) : (
-            <table className="compact-table" style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.75rem', tableLayout: 'auto' }}>
+            <table className="compact-table" style={{ borderCollapse: 'collapse', width: '100%', fontSize: conImportes ? '0.65rem' : '0.75rem', tableLayout: 'auto' }}>
               <thead>
                 {conImportes ? (
                   <>
@@ -1024,13 +1024,13 @@ export default function KardexClient({ initialMovimientos, productos, categorias
                       <>
                         <td style={{ textAlign: 'right' }}>
                           {kardexData.saldoInicialFisico > 0 
-                            ? (kardexData.saldoInicialValorado / kardexData.saldoInicialFisico).toFixed(2) 
+                            ? (kardexData.saldoInicialValorado / kardexData.saldoInicialFisico).toFixed(6).replace(/\.?0+$/, "") 
                             : '-'}
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{kardexData.saldoInicialEntValorado ? kardexData.saldoInicialEntValorado.toFixed(2) : '-'}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{kardexData.saldoInicialSalValorado ? kardexData.saldoInicialSalValorado.toFixed(2) : '-'}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{kardexData.saldoInicialEntValorado ? kardexData.saldoInicialEntValorado.toFixed(6).replace(/\.?0+$/, "") : '-'}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{kardexData.saldoInicialSalValorado ? kardexData.saldoInicialSalValorado.toFixed(6).replace(/\.?0+$/, "") : '-'}</td>
                           <td style={{ textAlign: 'right', fontWeight: 'bold', color: kardexData.saldoInicialValorado < 0 ? 'red' : 'inherit' }}>
-                          {kardexData.saldoInicialValorado.toFixed(2)}
+                          {kardexData.saldoInicialValorado.toFixed(6).replace(/\.?0+$/, "")}
                         </td>
                       </>
                     )}
@@ -1058,10 +1058,10 @@ export default function KardexClient({ initialMovimientos, productos, categorias
 
                   {conImportes && (
                     <>
-                      <td style={{ textAlign: 'right' }}>{r.precioUnitario.toFixed(2)}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--color-success)', fontWeight: 'bold' }}>{r.ingresoBs ? r.ingresoBs.toFixed(2) : ''}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--color-danger)', fontWeight: 'bold' }}>{r.egresoBs ? r.egresoBs.toFixed(2) : ''}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>Bs. {r.saldoBs.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right' }}>{r.precioUnitario.toFixed(6).replace(/\.?0+$/, "")}</td>
+                      <td style={{ textAlign: 'right', color: 'var(--color-success)', fontWeight: 'bold' }}>{r.ingresoBs ? r.ingresoBs.toFixed(6).replace(/\.?0+$/, "") : ''}</td>
+                      <td style={{ textAlign: 'right', color: 'var(--color-danger)', fontWeight: 'bold' }}>{r.egresoBs ? r.egresoBs.toFixed(6).replace(/\.?0+$/, "") : ''}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>Bs. {r.saldoBs.toFixed(6).replace(/\.?0+$/, "")}</td>
                     </>
                   )}
                 </tr>
@@ -1083,7 +1083,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
                       <td colSpan={10} style={{ textAlign: 'right' }}>TOTAL</td>
                       <td colSpan={2} style={{ textAlign: 'center' }}>-</td>
                       <td style={{ textAlign: 'right' }}>
-                        {kardexData.rows[kardexData.rows.length - 1].saldoBs?.toFixed(2)}
+                        {kardexData.rows[kardexData.rows.length - 1].saldoBs?.toFixed(6).replace(/\.?0+$/, "")}
                       </td>
                     </>
                   ) : (
@@ -1105,6 +1105,11 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     </>
   );
 }
+
+
+
+
+
 
 
 
