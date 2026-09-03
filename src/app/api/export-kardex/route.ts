@@ -125,7 +125,7 @@ export async function POST(req: Request) {
         // La responsividad principal la haremos con el alto de la fila.
         worksheet.getColumn('B').width = 18; // Default ancho base
         worksheet.getColumn('E').width = Math.max(12, Math.min(maxMarca + 2, 25));
-        worksheet.getColumn('F').width = 18; 
+        worksheet.getColumn('F').width = 14; 
 
       // ===== LOGICA PARA RESUMEN GENERAL O CATEGORIA =====
       const fechaTexto = `DEL ${formatDate(fechaDesde) || '(INICIO)'} AL ${formatDate(fechaHasta) || '(ACTUALIDAD)'}`;

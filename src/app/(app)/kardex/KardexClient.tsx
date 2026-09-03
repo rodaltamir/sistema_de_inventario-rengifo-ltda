@@ -78,6 +78,21 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       fechaInicio: fechaInicioUI,
       fechaFin: fechaFinUI
     });
+    const Toast = Swal.mixin({
+      toast: true,
+      position: 'bottom-end',
+      showConfirmButton: false,
+      timer: 3000,
+      timerProgressBar: true,
+      didOpen: (toast) => {
+        toast.addEventListener('mouseenter', Swal.stopTimer);
+        toast.addEventListener('mouseleave', Swal.resumeTimer);
+      }
+    });
+    Toast.fire({
+      icon: 'success',
+      title: 'Datos actualizados'
+    });
   };
 
   // Compute Kardex rows
@@ -142,9 +157,10 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     filteredMovs.forEach(m => {
       const isImportacion = m.transaccion.tipoTransaccion === 'SALDO INICIAL' || m.transaccion.tipoTransaccion === 'IMPORTACIÓN INICIAL';
       const isCompra = isImportacion || m.transaccion.tipoTransaccion === 'COMPRA' || m.transaccion.tipoTransaccion === 'ENTRADA';
-      const date = new Date(m.transaccion.fecha);
-      
-      const costoMovimiento = isCompra ? m.subtotal : (m.cantidad * m.producto.costo);
+      const isHistorico = m.transaccion.nroDocumento && m.transaccion.nroDocumento.startsWith('IMP-');
+        const date = new Date(m.transaccion.fecha);
+        
+        const costoMovimiento = (isCompra || isHistorico) ? m.subtotal : (m.cantidad * m.producto.costo);
 
       let isBeforeRange = false;
       if (isImportacion) {
@@ -236,7 +252,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
           nitCi: m.transaccion.nitCi,
           nombre: m.transaccion.razonSocial,
           factura: m.transaccion.nroDocumento,
-          precioUnitario: isCompra ? m.precioUnitario : m.producto.costo,
+            precioUnitario: (isCompra || isHistorico) ? m.precioUnitario : m.producto.costo,
           entradas: entradaFisica,
           salidas: salidaFisica,
           saldoFisico: currentFisico,

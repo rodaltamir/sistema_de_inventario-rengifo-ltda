@@ -378,6 +378,39 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     );
   };
 
+  const handleExport = async () => {
+    try {
+      Swal.fire({
+        title: 'Exportando...',
+        text: 'Por favor espere mientras se genera el archivo.',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      const res = await fetch("/api/export-productos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ search })
+      });
+
+      if (!res.ok) throw new Error("Error al exportar");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Productos_Exportados.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      Swal.close();
+    } catch (err: any) {
+      Swal.fire('Error', err.message || 'Hubo un error al exportar', 'error');
+    }
+  };
+
   return (
     <>
       <div className="card glass">
@@ -391,7 +424,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
           />
 
           <div className={styles.headerActions}>
-            <button className={`btn ${styles.btnSuccess}`} title="Exportar a Excel/PDF">
+            <button onClick={handleExport} className={`btn ${styles.btnSuccess}`} title="Exportar a Excel/PDF">
               <Download size={18} /> Exportar
             </button>
             <input
