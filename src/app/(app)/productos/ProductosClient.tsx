@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Plus, Edit, Trash2, X, Package, Download, Upload, Check, Calculator } from "lucide-react";
 import { createProducto, updateProducto, deleteProducto, importProductos, crearCategoriaConProductos } from "./actions";
 import ExcelJS from "exceljs";
@@ -11,6 +11,75 @@ export default function ProductosClient({ initialProductos, proveedores, initial
   const [productos, setProductos] = useState(initialProductos);
   const [categorias, setCategorias] = useState(initialCategorias || []);
   const [search, setSearch] = useState("");
+  const [fechaInicio, setFechaInicio] = useState<string>("");
+  const [fechaFin, setFechaFin] = useState<string>("");
+  const today = new Date();
+  const [selectedPreset, setSelectedPreset] = useState("mes");
+  const [selectedAnio, setSelectedAnio] = useState(today.getFullYear());
+  const [selectedMes, setSelectedMes] = useState(today.getMonth());
+  const [selectedSemestre, setSelectedSemestre] = useState(today.getMonth() < 6 ? 1 : 2);
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [appliedFechaInicio, setAppliedFechaInicio] = useState("");
+  const [appliedFechaFin, setAppliedFechaFin] = useState("");
+
+  // Update date inputs on preset change
+  useEffect(() => {
+    if (selectedPreset === "personalizado" || selectedPreset === "todos") {
+      if (selectedPreset === "todos") {
+        setFechaInicio("");
+        setFechaFin("");
+      }
+      return;
+    }
+
+    let start = new Date();
+    let end = new Date();
+
+    if (selectedPreset === "hoy") {
+      start = new Date();
+      end = new Date();
+    } else if (selectedPreset === "mes") {
+      start = new Date(selectedAnio, selectedMes, 1);
+      end = new Date(selectedAnio, selectedMes + 1, 0);
+    } else if (selectedPreset === "semestre") {
+      const startMonth = selectedSemestre === 1 ? 0 : 6;
+      start = new Date(selectedAnio, startMonth, 1);
+      end = new Date(selectedAnio, startMonth + 6, 0);
+    } else if (selectedPreset === "anual") {
+      start = new Date(selectedAnio, 0, 1);
+      end = new Date(selectedAnio, 11, 31);
+    }
+
+    const formatLocal = (d: Date) => {
+       const pad = (n: number) => n.toString().padStart(2, '0');
+       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+
+    setFechaInicio(formatLocal(start));
+    setFechaFin(formatLocal(end));
+  }, [selectedPreset, selectedAnio, selectedMes, selectedSemestre]);
+
+  const handleFilter = () => {
+    setAppliedSearch(search);
+    setAppliedFechaInicio(fechaInicio);
+    setAppliedFechaFin(fechaFin);
+    const Toast = Swal.mixin({
+      toast: true,
+      position: 'bottom-end',
+      showConfirmButton: false,
+      timer: 3000,
+      timerProgressBar: true,
+      didOpen: (toast) => {
+        toast.addEventListener('mouseenter', Swal.stopTimer)
+        toast.addEventListener('mouseleave', Swal.resumeTimer)
+      }
+    });
+    Toast.fire({
+      icon: 'success',
+      title: 'Datos actualizados'
+    });
+  };
+  const [fechaCreacion, setFechaCreacion] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -23,7 +92,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importDescription, setImportDescription] = useState("");
-  const [importYear, setImportYear] = useState<number>(new Date().getFullYear());
+  const [importDate, setImportDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   // Categoria Modal State
   const [isCategoriaModalOpen, setIsCategoriaModalOpen] = useState(false);
@@ -207,6 +276,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
         setProductos(productos.map(p => p.codigo === updated.codigo ? updated : p));
       } else {
         const newProduct = await createProducto({
+            fecha: fechaCreacion,
           ...formData,
           stock: parseInt(formData.stock),
           costo: parseFloat(formData.costo),
@@ -318,7 +388,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     setIsImporting(true);
     try {
       // El array que mandamos debe coincidir con lo que espera el server action
-      await importProductos(previewData, importDescription, importYear);
+      await importProductos(previewData, importDescription, importDate);
       setIsPreviewModalOpen(false);
       setPreviewData([]);
       setImportDescription("");
@@ -390,7 +460,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       const res = await fetch("/api/export-productos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ search })
+        body: JSON.stringify({ search: appliedSearch, fechaInicio: appliedFechaInicio, fechaFin: appliedFechaFin })
       });
 
       if (!res.ok) throw new Error("Error al exportar");
@@ -415,13 +485,29 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     <>
       <div className="card glass">
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <input
-            type="text"
-            placeholder="Buscar código o nombre..."
-            style={{ maxWidth: '300px' }}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                placeholder="Buscar código o nombre..."
+                style={{ maxWidth: '300px', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              <label style={{ fontSize: '0.9rem', color: '#6b7280' }}>Desde:</label>
+              <input 
+                type="date" 
+                style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }} 
+                value={fechaInicio} 
+                onChange={e => setFechaInicio(e.target.value)} 
+              />
+              <label style={{ fontSize: '0.9rem', color: '#6b7280' }}>Hasta:</label>
+              <input 
+                type="date" 
+                style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }} 
+                value={fechaFin} 
+                onChange={e => setFechaFin(e.target.value)} 
+              />
+            </div>
 
           <div className={styles.headerActions}>
             <button onClick={handleExport} className={`btn ${styles.btnSuccess}`} title="Exportar a Excel/PDF">
@@ -533,7 +619,16 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>Código *</label>
+                      <label className={styles.formLabel}>Fecha de Registro</label>
+                      <input
+                        type="date"
+                        className={styles.formInput}
+                        value={fechaCreacion}
+                        onChange={e => setFechaCreacion(e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label className={styles.formLabel}>Código *</label>
                     <input
                       required
                       type="text"
@@ -729,13 +824,13 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                 </div>
                 <div style={{ width: '120px' }}>
                   <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#374151' }}>
-                    Año *
+                    Fecha *
                   </label>
                   <input
-                    type="number"
-                    required
-                    value={importYear}
-                    onChange={(e) => setImportYear(parseInt(e.target.value))}
+                      type="date"
+                      required
+                      value={importDate}
+                      onChange={(e) => setImportDate(e.target.value)}
                     style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                   />
                 </div>

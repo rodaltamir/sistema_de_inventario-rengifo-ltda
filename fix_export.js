@@ -1,72 +1,35 @@
 const fs = require("fs");
-let content = fs.readFileSync("src/app/(app)/productos/ProductosClient.tsx", "utf8");
+let content = fs.readFileSync("src/app/api/export-productos/route.ts", "utf8");
 
-const oldCode1 = `  const toggleProductoSelection = (codigo: string) => {
-    setSelectedProductos(prev =>
-      prev.includes(codigo) ? prev.filter(c => c !== codigo) : [...prev, codigo]
-    );
-  };
-
-  return (`;
-
-const newCode1 = `  const toggleProductoSelection = (codigo: string) => {
-    setSelectedProductos(prev =>
-      prev.includes(codigo) ? prev.filter(c => c !== codigo) : [...prev, codigo]
-    );
-  };
-
-  const handleExport = async () => {
-    try {
-      Swal.fire({
-        title: 'Exportando...',
-        text: 'Por favor espere mientras se genera el archivo.',
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading()
+content = content.replace(/let tenantName = "Empresa";\s*let tenantNit = "0000000000";\s*if \(session\.user\.currentTenantId\) \{[\s\S]*?tenantNit = dbTenant\.nit \|\| "0000000000";\s*\}\s*\}/, 
+`let tenantInfo = { name: "Empresa", nit: "0000000000", casaMatriz: "", sucursal: "", ciudad: "" };
+    if (session.user.currentTenantId) {
+      const { masterPrisma } = await import("@/lib/prisma");
+      const dbTenant = await masterPrisma.tenant.findUnique({
+        where: { id: session.user.currentTenantId }
       });
+      if (dbTenant) {
+        tenantInfo = {
+          name: dbTenant.name,
+          nit: dbTenant.nit || "0000000000",
+          casaMatriz: dbTenant.casaMatriz || "",
+          sucursal: dbTenant.sucursal || "",
+          ciudad: "La Paz - Bolivia" // TODO: Add city to tenant model if needed
+        };
+      }
+    }`);
 
-      const res = await fetch("/api/export-productos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filterCategoria, search })
-      });
+content = content.replace(/const cellB1 = ws\.getCell\(1, 2\);\s*if \(cellB1\) cellB1\.value = tenantName;\s*const cellB2 = ws\.getCell\(2, 2\);\s*if \(cellB2\) cellB2\.value = \`NIT: \$\{tenantNit\}\`;/g, 
+`const cellA1 = ws.getCell(1, 1);
+    if (cellA1) cellA1.value = tenantInfo.name;
+    const cellA2 = ws.getCell(2, 1);
+    if (cellA2) cellA2.value = \`NIT: \${tenantInfo.nit}\`;
+    const cellA3 = ws.getCell(3, 1);
+    if (cellA3) cellA3.value = tenantInfo.casaMatriz ? \`Casa Matriz: \${tenantInfo.casaMatriz}\` : "Casa Matriz:";`);
 
-      if (!res.ok) throw new Error("Error al exportar");
+content = content.replace(/const cellH3 = ws\.getCell\(3, 8\); \/\/ H3 = Col 8, Row 3\s*if \(cellH3\) cellH3\.value = \`DEL \$\{fi\} AL \$\{ff\}\`;/g,
+`const cellF3 = ws.getCell(3, 6);
+    if (cellF3) cellF3.value = \`DEL \${fi} AL \${ff}\`;`);
 
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Productos_Exportados.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      
-      Swal.close();
-    } catch (err: any) {
-      Swal.fire('Error', err.message || 'Hubo un error al exportar', 'error');
-    }
-  };
-
-  return (`;
-
-const oldCode2 = `<button className={\`btn \${styles.btnSuccess}\`} title="Exportar a Excel/PDF">
-              <Download size={18} /> Exportar
-            </button>`;
-
-const newCode2 = `<button onClick={handleExport} className={\`btn \${styles.btnSuccess}\`} title="Exportar a Excel/PDF">
-              <Download size={18} /> Exportar
-            </button>`;
-
-if (content.includes(oldCode1)) {
-  content = content.replace(oldCode1, newCode1);
-  if (content.includes(oldCode2)) {
-    content = content.replace(oldCode2, newCode2);
-    fs.writeFileSync("src/app/(app)/productos/ProductosClient.tsx", content);
-    console.log("Successfully replaced both blocks.");
-  } else {
-    console.log("Failed to find block 2.");
-  }
-} else {
-  console.log("Failed to find block 1.");
-}
+fs.writeFileSync("src/app/api/export-productos/route.ts", content);
+console.log("Done");

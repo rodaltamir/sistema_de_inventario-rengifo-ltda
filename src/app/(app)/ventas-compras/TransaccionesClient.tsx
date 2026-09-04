@@ -5,6 +5,8 @@ import { Plus, Eye } from "lucide-react";
 export default function TransaccionesClient({ initialTransacciones }: { initialTransacciones: any[] }) {
   const [transacciones, setTransacciones] = useState(initialTransacciones);
   const [tipoFiltro, setTipoFiltro] = useState<string>("TODOS");
+  const [fechaInicio, setFechaInicio] = useState<string>("");
+  const [fechaFin, setFechaFin] = useState<string>("");
 
   const filtered = transacciones.filter(t => 
     tipoFiltro === "TODOS" ? true : t.tipoTransaccion === tipoFiltro

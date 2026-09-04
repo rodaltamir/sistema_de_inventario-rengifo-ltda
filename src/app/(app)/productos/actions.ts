@@ -47,6 +47,7 @@ export async function createProducto(data: {
   stock: number;
   costo: number;
   precioVenta: number;
+  fecha?: string;
 }) {
   const session = await getServerSession(authOptions);
   
@@ -130,7 +131,7 @@ export async function deleteProducto(codigo: string) {
   revalidatePath("/productos");
 }
 
-export async function importProductos(productos: any[], descripcion?: string, importYear?: number) {
+export async function importProductos(productos: any[], descripcion?: string, importDateStr?: string) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.currentConnectionString) throw new Error("No hay sesión activa");
 
@@ -182,11 +183,11 @@ export async function importProductos(productos: any[], descripcion?: string, im
   }
 
   const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-  const desc = descripcion || `Importación Histórica ${importYear || ""}`.trim();
+  const desc = descripcion || `Importación Histórica`.trim();
   
   // Utilizar UTC a mediodía para evitar que la conversión de zonas horarias retrase la fecha al año anterior (ej. 31/12/2024 en vez de 01/01/2025)
-  const yearDateStart = importYear ? new Date(Date.UTC(importYear, 11, 30, 12, 0, 0)) : new Date();
-  const yearDateEnd = importYear ? new Date(Date.UTC(importYear, 11, 30, 12, 0, 0)) : new Date();
+  const yearDateStart = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
+  const yearDateEnd = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
 
   // 1. Transaction for COMPRAS (Entradas)
   const compras = productos.filter(p => (parseInt(p.entradaCant) || 0) > 0);

@@ -13,9 +13,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { filterCategoria, search } = await req.json();
+    const { search, fechaInicio, fechaFin } = await req.json();
 
     const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
+    
+    // Obtener info del tenant si est en la DB master (opcional) o hardcodear como Casa Matriz
+    let tenantInfo = { name: "Casa Matriz", nit: "0000000000", casaMatriz: "", sucursal: "" };
+    if (session.user.currentTenantId) {
+      const { masterPrisma } = await import("@/lib/prisma");
+      const dbTenant = await masterPrisma.tenant.findUnique({
+        where: { id: session.user.currentTenantId }
+      });
+      if (dbTenant) {
+        tenantInfo = {
+          name: dbTenant.name,
+          nit: dbTenant.nit || "0000000000",
+          casaMatriz: dbTenant.casaMatriz || "",
+          sucursal: dbTenant.sucursal || ""
+        };
+      }
+    }
+
     const productos = await tenantPrisma.producto.findMany({
       include: {
         categoria: true,
@@ -25,9 +43,6 @@ export async function POST(req: NextRequest) {
     });
 
     let filtered = productos;
-    if (filterCategoria && filterCategoria !== "TODAS") {
-      filtered = filtered.filter(p => p.categoriaId === filterCategoria);
-    }
     if (search) {
       const q = search.toLowerCase();
       filtered = filtered.filter(p => 
@@ -35,20 +50,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (fechaInicio) {
+      const d = new Date(fechaInicio + "T00:00:00");
+      filtered = filtered.filter(p => new Date(p.createdAt) >= d);
+    }
+    if (fechaFin) {
+      const d = new Date(fechaFin + "T23:59:59");
+      filtered = filtered.filter(p => new Date(p.createdAt) <= d);
+    }
+
     const templatePath = path.join(process.cwd(), "public", "templates", "plantilla_exportacion_productos.xlsx");
     const workbook = new ExcelJS.Workbook();
     if (fs.existsSync(templatePath)) {
       await workbook.xlsx.readFile(templatePath);
     } else {
-      // Fallback si no existe la plantilla
       const sheet = workbook.addWorksheet("Productos");
-      sheet.addRow(["COD. ITEM", "NOMBRE", "DESCRIPCIÓN", "MARCA", "UNIDAD", "METODO DE INVENTARIO", "PROVEEDOR", "CATEGORIA", "STOCK", "P/U", "PRECIO DE VENTA"]);
     }
 
     const ws = workbook.worksheets[0];
-    const startRow = 2;
-    // Clear rows if there's any sample data
-    ws.spliceRows(startRow, ws.rowCount - startRow + 1);
+    
+    // Escribir datos de la empresa (segun plantilla, en la columna B o 2)
+    // Para asegurarse, si B1 est merged, escribir en la celda master (que es la superior izquierda)
+    const cellA1 = ws.getCell(1, 1);
+    if (cellA1) cellA1.value = tenantInfo.name;
+    const cellA2 = ws.getCell(2, 1);
+    if (cellA2) cellA2.value = `NIT: ${tenantInfo.nit}`;
+    const cellA3 = ws.getCell(3, 1);
+    if (cellA3) cellA3.value = tenantInfo.casaMatriz ? `Casa Matriz: ${tenantInfo.casaMatriz}` : "Casa Matriz:";
+
+    const fi = fechaInicio ? new Date(fechaInicio + "T12:00:00").toLocaleDateString() : "INICIO";
+    const ff = fechaFin ? new Date(fechaFin + "T12:00:00").toLocaleDateString() : "ACTUALIDAD";
+    const cellF3 = ws.getCell(3, 6);
+    if (cellF3) cellF3.value = `DEL ${fi} AL ${ff}`;
+
+    const startRow = 10;
+    // Clear rows if there's any sample data below startRow
+    if (ws.rowCount >= startRow) {
+      ws.spliceRows(startRow, ws.rowCount - startRow + 1);
+    }
 
     const fontStyle = { name: "Aptos Narrow", size: 11 };
     const borderStyle = {
@@ -61,35 +100,44 @@ export async function POST(req: NextRequest) {
     let currentRow = startRow;
     for (const p of filtered) {
       const row = ws.getRow(currentRow);
+      
+      // Aplicar merge para NOMBRE (cols 2 a 4) y DESCRIPCION (cols 6 a 8)
+      // ExcelJS mergeCells es (topRow, leftCol, bottomRow, rightCol)
+      try { ws.mergeCells(currentRow, 2, currentRow, 4); } catch(e) {}
+      try { ws.mergeCells(currentRow, 6, currentRow, 8); } catch(e) {}
+
       row.getCell(1).value = p.codigo || "-";
       row.getCell(2).value = p.nombre || "-";
-      row.getCell(3).value = p.descripcion || "-";
-      row.getCell(4).value = p.marca || "-";
-      row.getCell(5).value = p.unidadMedida || "-";
-      row.getCell(6).value = p.metodoInventario || "-";
-      row.getCell(7).value = p.proveedor?.nombre || "-";
-      row.getCell(8).value = p.categoria?.nombre || "-";
-      row.getCell(9).value = p.stock || 0;
-      row.getCell(10).value = p.costo || 0;
-      row.getCell(11).value = p.precioVenta || 0;
+      // La celda 3 y 4 estn merged con la 2
+      row.getCell(5).value = p.marca || "-";
+      row.getCell(6).value = p.descripcion || "-";
+      // La celda 7 y 8 estn merged con la 6
+      row.getCell(9).value = p.unidadMedida || "-";
+      row.getCell(10).value = p.metodoInventario || "-";
+      row.getCell(11).value = p.proveedor?.nombre || "-";
+      row.getCell(12).value = p.categoria?.nombre || "-";
+      row.getCell(13).value = p.stock || 0;
+      row.getCell(14).value = p.costo || 0;
+      row.getCell(15).value = p.precioVenta || 0;
 
-      row.eachCell((cell, colNumber) => {
+      for(let i=1; i<=15; i++) {
+        const cell = row.getCell(i);
         cell.font = fontStyle;
         cell.border = borderStyle;
         cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
         
-        // Formato número para P/U y Precio Venta y Stock
-        if (colNumber === 9 || colNumber === 10 || colNumber === 11) {
+        if (i >= 13 && i <= 15) {
           cell.numFmt = '#,##0.00####';
         }
-      });
+      }
 
       // Calcular altura aproximada por "NOMBRE" y "DESCRIPCION" responsivos
       const nombreLength = p.nombre ? p.nombre.length : 1;
       const descLength = p.descripcion ? p.descripcion.length : 1;
-      // Anchos aprox de las columnas en la plantilla
-      const nombreColWidth = ws.getColumn(2).width || 30;
-      const descColWidth = ws.getColumn(3).width || 30;
+      
+      // Anchos aprox de las columnas fusionadas
+      const nombreColWidth = 45;
+      const descColWidth = 45;
 
       const linesNombre = Math.ceil(nombreLength / nombreColWidth);
       const linesDesc = Math.ceil(descLength / descColWidth);
