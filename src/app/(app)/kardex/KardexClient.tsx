@@ -419,7 +419,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
           const puSalida = r.salidas > 0 ? (r.salidasBs / r.salidas).toFixed(6).replace(/\.?0+$/, "") : '-';
 
           body.push([
-            r.codigo, r.descripcion, r.unidad,
+            r.codigo, r.nombre, r.descripcion, r.unidad,
             r.entradas || '-', puEntrada, r.entradasBs ? r.entradasBs.toFixed(6).replace(/\.?0+$/, "") : '-',
             r.salidas || '-', puSalida, r.salidasBs ? r.salidasBs.toFixed(6).replace(/\.?0+$/, "") : '-',
             r.saldo || '-', r.saldoBs ? r.saldoBs.toFixed(6).replace(/\.?0+$/, "") : '-'
@@ -583,7 +583,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
             { content: totSalidas > 0 ? totSalidas.toString() : '-', styles: { fontStyle: 'bold' } as any },
             { content: '-', styles: { fontStyle: 'bold', halign: 'center' } as any },
             { content: totSalidasBs > 0 ? totSalidasBs.toFixed(6).replace(/\.?0+$/, "") : '-', styles: { fontStyle: 'bold' } as any },
-            { content: '-', styles: { fontStyle: 'bold', halign: 'center' } as any },
+            { content: lastFisico.toString(), styles: { fontStyle: 'bold' } as any },
             { content: lastValorado.toFixed(6).replace(/\.?0+$/, ""), styles: { fontStyle: 'bold' } as any }
           ]);
         } else {
@@ -591,7 +591,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
             { content: 'TOTALES', colSpan: 6, styles: { fontStyle: 'bold', halign: 'right' } as any },
             { content: totEntradas > 0 ? totEntradas.toString() : '-', styles: { fontStyle: 'bold' } as any },
             { content: totSalidas > 0 ? totSalidas.toString() : '-', styles: { fontStyle: 'bold' } as any },
-            { content: '-', styles: { fontStyle: 'bold', halign: 'center' } as any }
+            { content: lastFisico.toString(), styles: { fontStyle: 'bold' } as any }
           ]);
         }
       }
@@ -609,18 +609,46 @@ export default function KardexClient({ initialMovimientos, productos, categorias
         lineColor: [0, 0, 0],
         lineWidth: 0.1
       },
-      columnStyles: {
-        3: { halign: 'left' },
+      columnStyles: isTodos ? {
+        0: { halign: 'center' },
+        1: { halign: 'left' },
+        2: { halign: 'left' },
+        3: { halign: 'center' },
+        ...(conImportes ? {
+          4: { halign: 'right' },
+          5: { halign: 'right' },
+          6: { halign: 'right' },
+          7: { halign: 'right' },
+          8: { halign: 'right' },
+          9: { halign: 'right' },
+          10: { halign: 'right', fontStyle: 'bold' },
+          11: { halign: 'right', fontStyle: 'bold' }
+        } : {
+          4: { halign: 'right' },
+          5: { halign: 'right' },
+          6: { halign: 'right', fontStyle: 'bold' }
+        })
+      } : {
+        0: { halign: 'center' },
+        1: { halign: 'center' },
+        2: { halign: 'center' },
+        3: { halign: 'center' },
         4: { halign: 'left' },
         5: { halign: 'left' },
-        6: { fontStyle: 'bold' },
-        7: { fontStyle: 'bold' },
-        8: { fontStyle: 'bold' },
         ...(conImportes ? {
-          10: { fontStyle: 'bold' },
-          11: { fontStyle: 'bold' },
-          12: { fontStyle: 'bold' }
-        } : {})
+          6: { halign: 'right' },
+          7: { halign: 'right' },
+          8: { halign: 'right' },
+          9: { halign: 'right' },
+          10: { halign: 'right' },
+          11: { halign: 'right' },
+          12: { halign: 'right', fontStyle: 'bold' },
+          13: { halign: 'right', fontStyle: 'bold' }
+        } : {
+          6: { halign: 'right' },
+          7: { halign: 'right' },
+          8: { halign: 'right', fontStyle: 'bold' }
+        })
       }
     });
 

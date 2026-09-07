@@ -1,4 +1,5 @@
-const { PrismaClient } = require('./prisma/generated/master/index.js');
+const path = require('path');
+const { PrismaClient } = require(path.join(__dirname, '../prisma/generated/master/index.js'));
 const bcrypt = require('bcryptjs');
 
 async function createSuperAdmin() {
@@ -27,9 +28,10 @@ async function createSuperAdmin() {
     });
 
     console.log('');
+    console.log('==========================================');
     console.log('✅ ¡SUPERUSUARIO INYECTADO CON ÉXITO!');
     console.log(`Email: ${user.email}`);
-    console.log(`Rol: ${user.role}`);
+    console.log(`Rol:   ${user.role}`);
     console.log('==========================================');
   } catch (error) {
     console.error('❌ Error inyectando el superusuario:', error);
