@@ -66,6 +66,8 @@ export async function createProducto(data: {
     throw new Error("Ya existe un producto con ese código");
   }
 
+  const regDate = data.fecha ? new Date(data.fecha + "T12:00:00") : new Date();
+
   const newProduct = await tenantPrisma.producto.create({
     data: {
       codigo: data.codigo,
@@ -79,8 +81,33 @@ export async function createProducto(data: {
       metodoInventario: data.metodoInventario || "Promedio Ponderado",
       proveedorId: data.proveedorId || null,
       categoriaId: data.categoriaId || null,
+      createdAt: regDate,
     }
   });
+
+  if (data.stock > 0) {
+    const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+    await tenantPrisma.transaccion.create({
+      data: {
+        tipoTransaccion: "SALDO INICIAL",
+        nroDocumento: "INI-" + ts,
+        nitCi: "0",
+        razonSocial: "SISTEMA - SALDO INICIAL",
+        observaciones: "Registro inicial de producto",
+        formaPago: "NINGUNO",
+        fecha: regDate,
+        createdAt: regDate,
+        detalles: {
+          create: [{
+            productoCodigo: data.codigo,
+            cantidad: data.stock,
+            precioUnitario: data.costo || 0,
+            subtotal: data.stock * (data.costo || 0)
+          }]
+        }
+      }
+    });
+  }
 
   revalidatePath("/productos");
   return newProduct;
@@ -141,6 +168,10 @@ export async function importProductos(productos: any[], descripcion?: string, im
     return 0; // Nada nuevo que importar
   }
 
+  // Utilizar UTC a mediodía para evitar que la conversión de zonas horarias retrase la fecha al año anterior (ej. 31/12/2024 en vez de 01/01/2025)
+  const yearDateStart = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
+  const yearDateEnd = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
+
   // Upsert products to update existing ones and create new ones
   for (const p of productos) {
     const qtyStock = parseInt(p.stock) || 0;
@@ -162,6 +193,7 @@ export async function importProductos(productos: any[], descripcion?: string, im
           stock: qtyStock,
           costo: cost,
           precioVenta: pVenta,
+          createdAt: yearDateStart,
         }
       });
     } else {
@@ -176,7 +208,8 @@ export async function importProductos(productos: any[], descripcion?: string, im
           costo: cost,
           precioVenta: pVenta,
           metodoInventario: p.metodoInventario || "Promedio Ponderado",
-          proveedorId: null
+          proveedorId: null,
+          createdAt: yearDateStart,
         }
       });
     }
@@ -184,10 +217,6 @@ export async function importProductos(productos: any[], descripcion?: string, im
 
   const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
   const desc = descripcion || `Importación Histórica`.trim();
-  
-  // Utilizar UTC a mediodía para evitar que la conversión de zonas horarias retrase la fecha al año anterior (ej. 31/12/2024 en vez de 01/01/2025)
-  const yearDateStart = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
-  const yearDateEnd = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
 
   // 1. Transaction for COMPRAS (Entradas)
   const compras = productos.filter(p => (parseInt(p.entradaCant) || 0) > 0);

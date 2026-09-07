@@ -10,13 +10,17 @@
   align-items: center;
   z-index: 1000;
   backdrop-filter: blur(4px);
+  padding: 1rem;
 }
 
 .modalContent {
   background: white;
   width: 100%;
   max-width: 800px;
+  max-height: 90vh;
   border-radius: 12px;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
@@ -28,6 +32,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .modalTitle {
@@ -55,14 +60,33 @@
   opacity: 0.8;
 }
 
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .modalBody {
   padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .formGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+  .formGroupFull {
+    grid-column: span 1;
+  }
 }
 
 .formGroup {
@@ -102,6 +126,7 @@
   gap: 1rem;
   border-top: 1px solid var(--color-border);
   background: #f9fafb;
+  flex-shrink: 0;
 }
 
 .btnCancel {

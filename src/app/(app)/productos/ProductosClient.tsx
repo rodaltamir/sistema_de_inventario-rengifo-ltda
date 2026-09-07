@@ -79,9 +79,48 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       title: 'Datos actualizados'
     });
   };
-  const [fechaCreacion, setFechaCreacion] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [prodPreset, setProdPreset] = useState("anual");
+  const [prodAnio, setProdAnio] = useState(today.getFullYear());
+  const [prodMes, setProdMes] = useState(today.getMonth());
+  const [prodSemestre, setProdSemestre] = useState(today.getMonth() < 6 ? 1 : 2);
+  const [fechaCreacion, setFechaCreacion] = useState<string>(`${today.getFullYear()}-01-01`);
+
+  useEffect(() => {
+    if (prodPreset === "personalizado") return;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    if (prodPreset === "anual") {
+      setFechaCreacion(`${prodAnio}-01-01`);
+    } else if (prodPreset === "semestral") {
+      const m = prodSemestre === 1 ? '01' : '07';
+      setFechaCreacion(`${prodAnio}-${m}-01`);
+    } else if (prodPreset === "mensual") {
+      setFechaCreacion(`${prodAnio}-${pad(prodMes + 1)}-01`);
+    }
+  }, [prodPreset, prodAnio, prodMes, prodSemestre]);
+
+  const [importPreset, setImportPreset] = useState("anual");
+  const [importAnio, setImportAnio] = useState(today.getFullYear());
+  const [importMes, setImportMes] = useState(today.getMonth());
+  const [importSemestre, setImportSemestre] = useState(today.getMonth() < 6 ? 1 : 2);
+  const [importDate, setImportDate] = useState<string>(`${today.getFullYear()}-01-01`);
+
+  useEffect(() => {
+    if (importPreset === "personalizado") return;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    if (importPreset === "anual") {
+      setImportDate(`${importAnio}-01-01`);
+    } else if (importPreset === "semestral") {
+      const m = importSemestre === 1 ? '01' : '07';
+      setImportDate(`${importAnio}-${m}-01`);
+    } else if (importPreset === "mensual") {
+      setImportDate(`${importAnio}-${pad(importMes + 1)}-01`);
+    }
+  }, [importPreset, importAnio, importMes, importSemestre]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportCategoriaId, setExportCategoriaId] = useState("");
+  const [exportProveedorId, setExportProveedorId] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -92,7 +131,6 @@ export default function ProductosClient({ initialProductos, proveedores, initial
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importDescription, setImportDescription] = useState("");
-  const [importDate, setImportDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   // Categoria Modal State
   const [isCategoriaModalOpen, setIsCategoriaModalOpen] = useState(false);
@@ -203,6 +241,9 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
   const openNewModal = () => {
     setIsEditing(false);
+    setProdPreset("anual");
+    setProdAnio(today.getFullYear());
+    setFechaCreacion(`${today.getFullYear()}-01-01`);
     setFormData({
       codigo: "",
       nombre: "",
@@ -221,6 +262,10 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
   const openEditModal = (p: any) => {
     setIsEditing(true);
+    if (p.createdAt) {
+      setFechaCreacion(new Date(p.createdAt).toISOString().split('T')[0]);
+      setProdPreset("personalizado");
+    }
     setFormData({
       codigo: p.codigo,
       nombre: p.nombre,
@@ -450,6 +495,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
   const handleExport = async () => {
     try {
+      setIsExportModalOpen(false);
       Swal.fire({
         title: 'Exportando...',
         text: 'Por favor espere mientras se genera el archivo.',
@@ -460,7 +506,13 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       const res = await fetch("/api/export-productos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ search: appliedSearch, fechaInicio: appliedFechaInicio, fechaFin: appliedFechaFin })
+        body: JSON.stringify({ 
+          search: search, 
+          fechaInicio: fechaInicio, 
+          fechaFin: fechaFin,
+          categoriaId: exportCategoriaId,
+          proveedorId: exportProveedorId
+        })
       });
 
       if (!res.ok) throw new Error("Error al exportar");
@@ -493,24 +545,10 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
-              <label style={{ fontSize: '0.9rem', color: '#6b7280' }}>Desde:</label>
-              <input 
-                type="date" 
-                style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }} 
-                value={fechaInicio} 
-                onChange={e => setFechaInicio(e.target.value)} 
-              />
-              <label style={{ fontSize: '0.9rem', color: '#6b7280' }}>Hasta:</label>
-              <input 
-                type="date" 
-                style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }} 
-                value={fechaFin} 
-                onChange={e => setFechaFin(e.target.value)} 
-              />
             </div>
 
           <div className={styles.headerActions}>
-            <button onClick={handleExport} className={`btn ${styles.btnSuccess}`} title="Exportar a Excel/PDF">
+            <button onClick={() => setIsExportModalOpen(true)} className={`btn ${styles.btnSuccess}`} title="Exportar a Excel/PDF">
               <Download size={18} /> Exportar
             </button>
             <input
@@ -613,20 +651,80 @@ export default function ProductosClient({ initialProductos, proveedores, initial
               </button>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className={styles.modalForm}>
               <div className={styles.modalBody}>
                 {error && <div style={{ color: 'red', marginBottom: '1rem', fontWeight: 'bold' }}>{error}</div>}
 
                 <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                      <label className={styles.formLabel}>Fecha de Registro</label>
-                      <input
-                        type="date"
-                        className={styles.formInput}
-                        value={fechaCreacion}
-                        onChange={e => setFechaCreacion(e.target.value)}
-                      />
+                  <div className={`${styles.formGroup} ${styles.formGroupFull}`} style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '0.5rem' }}>
+                    <label className={styles.formLabel} style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '0.4rem' }}>
+                      Fecha de Registro
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', alignItems: 'center' }}>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Tipo</label>
+                        <select className={styles.formInput} value={prodPreset} onChange={e => setProdPreset(e.target.value)}>
+                          <option value="anual">Anual</option>
+                          <option value="semestral">Semestral</option>
+                          <option value="mensual">Mensual</option>
+                          <option value="personalizado">Personalizado</option>
+                        </select>
+                      </div>
+
+                      {prodPreset === "anual" && (
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Año</label>
+                          <input type="number" className={styles.formInput} value={prodAnio} onChange={e => setProdAnio(parseInt(e.target.value) || today.getFullYear())} />
+                        </div>
+                      )}
+
+                      {prodPreset === "semestral" && (
+                        <>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Semestre</label>
+                            <select className={styles.formInput} value={prodSemestre} onChange={e => setProdSemestre(parseInt(e.target.value))}>
+                              <option value={1}>1er Semestre (Ene-Jun)</option>
+                              <option value={2}>2do Semestre (Jul-Dic)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Año</label>
+                            <input type="number" className={styles.formInput} value={prodAnio} onChange={e => setProdAnio(parseInt(e.target.value) || today.getFullYear())} />
+                          </div>
+                        </>
+                      )}
+
+                      {prodPreset === "mensual" && (
+                        <>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Mes</label>
+                            <select className={styles.formInput} value={prodMes} onChange={e => setProdMes(parseInt(e.target.value))}>
+                              {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m, i) => (
+                                <option key={i} value={i}>{m}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Año</label>
+                            <input type="number" className={styles.formInput} value={prodAnio} onChange={e => setProdAnio(parseInt(e.target.value) || today.getFullYear())} />
+                          </div>
+                        </>
+                      )}
+
+                      <div>
+                        <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Fecha Asignada</label>
+                        <input 
+                          type="date" 
+                          className={styles.formInput} 
+                          value={fechaCreacion} 
+                          onChange={e => {
+                            setFechaCreacion(e.target.value);
+                            setProdPreset("personalizado");
+                          }} 
+                        />
+                      </div>
                     </div>
+                  </div>
                     <div className={styles.formGroup}>
                       <label className={styles.formLabel}>Código *</label>
                     <input
@@ -809,9 +907,9 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                 Se importarán <strong>{previewData.length}</strong> productos.
               </p>
 
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#374151' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.3rem', fontSize: '0.85rem', color: '#374151' }}>
                     Descripción de la Importación (Opcional)
                   </label>
                   <input
@@ -822,17 +920,103 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                     style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
                   />
                 </div>
-                <div style={{ width: '120px' }}>
-                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#374151' }}>
-                    Fecha *
+
+                <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#1e293b' }}>
+                    Fecha de Importación *
                   </label>
-                  <input
-                      type="date"
-                      required
-                      value={importDate}
-                      onChange={(e) => setImportDate(e.target.value)}
-                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', alignItems: 'center' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Tipo</label>
+                      <select 
+                        style={{ width: '100%', padding: '0.45rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem' }}
+                        value={importPreset} 
+                        onChange={e => setImportPreset(e.target.value)}
+                      >
+                        <option value="anual">Anual</option>
+                        <option value="semestral">Semestral</option>
+                        <option value="mensual">Mensual</option>
+                        <option value="personalizado">Personalizado</option>
+                      </select>
+                    </div>
+
+                    {importPreset === "anual" && (
+                      <div>
+                        <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Año</label>
+                        <input 
+                          type="number" 
+                          style={{ width: '100%', padding: '0.45rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem' }}
+                          value={importAnio} 
+                          onChange={e => setImportAnio(parseInt(e.target.value) || today.getFullYear())} 
+                        />
+                      </div>
+                    )}
+
+                    {importPreset === "semestral" && (
+                      <>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Semestre</label>
+                          <select 
+                            style={{ width: '100%', padding: '0.45rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem' }}
+                            value={importSemestre} 
+                            onChange={e => setImportSemestre(parseInt(e.target.value))}
+                          >
+                            <option value={1}>1er Semestre (Ene-Jun)</option>
+                            <option value={2}>2do Semestre (Jul-Dic)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Año</label>
+                          <input 
+                            type="number" 
+                            style={{ width: '100%', padding: '0.45rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem' }}
+                            value={importAnio} 
+                            onChange={e => setImportAnio(parseInt(e.target.value) || today.getFullYear())} 
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {importPreset === "mensual" && (
+                      <>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Mes</label>
+                          <select 
+                            style={{ width: '100%', padding: '0.45rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem' }}
+                            value={importMes} 
+                            onChange={e => setImportMes(parseInt(e.target.value))}
+                          >
+                            {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m, i) => (
+                              <option key={i} value={i}>{m}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Año</label>
+                          <input 
+                            type="number" 
+                            style={{ width: '100%', padding: '0.45rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem' }}
+                            value={importAnio} 
+                            onChange={e => setImportAnio(parseInt(e.target.value) || today.getFullYear())} 
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Fecha Asignada</label>
+                      <input 
+                        type="date" 
+                        required
+                        value={importDate} 
+                        onChange={e => {
+                          setImportDate(e.target.value);
+                          setImportPreset("personalizado");
+                        }} 
+                        style={{ width: '100%', padding: '0.45rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.85rem' }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1064,6 +1248,116 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Modal Exportación */}
+      {isExportModalOpen && (
+        <div className={styles.modalOverlay} style={{ zIndex: 1000 }}>
+          <div className={styles.modalContent} style={{ maxWidth: '500px' }}>
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>
+                <Download size={20} /> Exportar Productos
+              </h2>
+              <button className={styles.closeButton} onClick={() => setIsExportModalOpen(false)}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.formGroup} style={{ marginBottom: '1rem' }}>
+                <label className={styles.formLabel}>Rango de Tiempo</label>
+                <select className={styles.formInput} value={selectedPreset} onChange={e => setSelectedPreset(e.target.value)}>
+                  <option value="todos">Todos</option>
+                  <option value="hoy">Hoy</option>
+                  <option value="mes">Mensual</option>
+                  <option value="semestre">Semestral</option>
+                  <option value="anual">Anual</option>
+                  <option value="personalizado">Personalizado</option>
+                </select>
+              </div>
+
+              {selectedPreset === "mes" && (
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.formLabel}>Mes</label>
+                    <select className={styles.formInput} value={selectedMes} onChange={e => setSelectedMes(parseInt(e.target.value))}>
+                      {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m, i) => (
+                        <option key={i} value={i}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.formLabel}>Año</label>
+                    <input type="number" className={styles.formInput} value={selectedAnio} onChange={e => setSelectedAnio(parseInt(e.target.value))} />
+                  </div>
+                </div>
+              )}
+
+              {selectedPreset === "semestre" && (
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.formLabel}>Semestre</label>
+                    <select className={styles.formInput} value={selectedSemestre} onChange={e => setSelectedSemestre(parseInt(e.target.value))}>
+                      <option value={1}>1er Semestre (Ene-Jun)</option>
+                      <option value={2}>2do Semestre (Jul-Dic)</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.formLabel}>Año</label>
+                    <input type="number" className={styles.formInput} value={selectedAnio} onChange={e => setSelectedAnio(parseInt(e.target.value))} />
+                  </div>
+                </div>
+              )}
+
+              {selectedPreset === "anual" && (
+                <div className={styles.formGroup} style={{ marginBottom: '1rem' }}>
+                  <label className={styles.formLabel}>Año</label>
+                  <input type="number" className={styles.formInput} value={selectedAnio} onChange={e => setSelectedAnio(parseInt(e.target.value))} />
+                </div>
+              )}
+
+              {selectedPreset === "personalizado" && (
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.formLabel}>Desde</label>
+                    <input type="date" className={styles.formInput} value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className={styles.formLabel}>Hasta</label>
+                    <input type="date" className={styles.formInput} value={fechaFin} onChange={e => setFechaFin(e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              <div className={styles.formGroup} style={{ marginBottom: '1rem' }}>
+                <label className={styles.formLabel}>Proveedor</label>
+                <select className={styles.formInput} value={exportProveedorId} onChange={e => setExportProveedorId(e.target.value)}>
+                  <option value="">-- Todos los Proveedores --</option>
+                  {proveedores.map(p => (
+                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={styles.formGroup} style={{ marginBottom: '1rem' }}>
+                <label className={styles.formLabel}>Categoría</label>
+                <select className={styles.formInput} value={exportCategoriaId} onChange={e => setExportCategoriaId(e.target.value)}>
+                  <option value="">-- Todas las Categorías --</option>
+                  {categorias.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+            </div>
+            <div className={styles.modalFooter}>
+              <button type="button" className={styles.btnCancel} onClick={() => setIsExportModalOpen(false)}>
+                Cancelar
+              </button>
+              <button type="button" className={styles.btnSave} onClick={handleExport}>
+                Confirmar Exportación
+              </button>
+            </div>
           </div>
         </div>
       )}

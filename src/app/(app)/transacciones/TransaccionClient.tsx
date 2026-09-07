@@ -267,6 +267,27 @@ export default function TransaccionClient({
     }
   };
 
+  // Preset de fecha de registro para nuevo producto
+  const today = new Date();
+  const [prodPreset, setProdPreset] = useState("anual");
+  const [prodAnio, setProdAnio] = useState(today.getFullYear());
+  const [prodMes, setProdMes] = useState(today.getMonth());
+  const [prodSemestre, setProdSemestre] = useState(today.getMonth() < 6 ? 1 : 2);
+  const [productFechaCreacion, setProductFechaCreacion] = useState<string>(`${today.getFullYear()}-01-01`);
+
+  useEffect(() => {
+    if (prodPreset === "personalizado") return;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    if (prodPreset === "anual") {
+      setProductFechaCreacion(`${prodAnio}-01-01`);
+    } else if (prodPreset === "semestral") {
+      const m = prodSemestre === 1 ? '01' : '07';
+      setProductFechaCreacion(`${prodAnio}-${m}-01`);
+    } else if (prodPreset === "mensual") {
+      setProductFechaCreacion(`${prodAnio}-${pad(prodMes + 1)}-01`);
+    }
+  }, [prodPreset, prodAnio, prodMes, prodSemestre]);
+
   const handleCreateProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setProductLoading(true);
@@ -277,6 +298,7 @@ export default function TransaccionClient({
         stock: parseInt(productFormData.stock) || 0,
         costo: parseFloat(productFormData.costo) || 0,
         precioVenta: parseFloat(productFormData.precioVenta) || 0,
+        fecha: productFechaCreacion,
       });
       setProductos([newProduct, ...productos]);
       setIsProductModalOpen(false);
@@ -672,7 +694,7 @@ export default function TransaccionClient({
                 {detalles.map((d) => (
                   <tr key={d.id}>
                     <td>
-                      <SearchableProductSelect value={d.productoCodigo} onChange={(val) => updateDetalle(d.id, "productoCodigo", val)} productos={productos} onAddNewProduct={modo === 'COMPRA' ? () => { setProductFormData({ ...productFormData, codigo: "", nombre: "", costo: "0.00", precioVenta: "0.00" }); setIsProductModalOpen(true); } : undefined} />
+                      <SearchableProductSelect value={d.productoCodigo} onChange={(val) => updateDetalle(d.id, "productoCodigo", val)} productos={productos} onAddNewProduct={modo === 'COMPRA' ? () => { setProductFormData({ codigo: "", nombre: "", descripcion: "", marca: "", unidadMedida: "Unidad", metodoInventario: "Promedio Ponderado", proveedorId: "", categoriaId: "", stock: "0", costo: "0.00", precioVenta: "0.00" }); setProdPreset("anual"); setProdAnio(new Date().getFullYear()); setProductFechaCreacion(`${new Date().getFullYear()}-01-01`); setIsProductModalOpen(true); } : undefined} />
                     </td>
                     <td>
                       <input
@@ -826,65 +848,341 @@ export default function TransaccionClient({
     
       {/* Modal Nuevo Producto */}
       {isProductModalOpen && (
-        <div className={styles.modalOverlay} style={{ zIndex: 1000, position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className={styles.modalContent} style={{ background: '#fff', borderRadius: '8px', width: '90%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className={styles.modalHeader} style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 className={styles.modalTitle} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.25rem', margin: 0 }}>
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 1050,
+          background: 'rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '12px',
+            width: '100%',
+            maxWidth: '650px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <div style={{
+              background: 'var(--color-primary)',
+              color: 'white',
+              padding: '1.25rem 1.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexShrink: 0
+            }}>
+              <h2 style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '1.15rem',
+                fontWeight: 700,
+                margin: 0,
+                color: 'white'
+              }}>
                 <Package size={20} /> Nuevo Producto
               </h2>
-              <button className={styles.closeButton} onClick={() => setIsProductModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                <X size={24} />
+              <button
+                type="button"
+                onClick={() => setIsProductModalOpen(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0.25rem'
+                }}
+              >
+                <X size={22} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateProductSubmit}>
-              <div className={styles.modalBody} style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                {productError && <div style={{ color: 'red', marginBottom: '1rem', fontWeight: 'bold', gridColumn: '1 / -1' }}>{productError}</div>}
+            <form onSubmit={handleCreateProductSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div style={{
+                padding: '1.5rem',
+                overflowY: 'auto',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.25rem'
+              }}>
+                {productError && (
+                  <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', padding: '0.75rem', borderRadius: '6px', fontSize: '0.875rem' }}>
+                    {productError}
+                  </div>
+                )}
 
-                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Código *</label>
-                  <input required type="text" name="codigo" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="PROD-006" value={productFormData.codigo} onChange={handleProductInputChange} />
-                </div>
-                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Nombre *</label>
-                  <input required type="text" name="nombre" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="Nombre del producto" value={productFormData.nombre} onChange={handleProductInputChange} />
+                {/* Fecha de Registro con Presets */}
+                <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <label style={{ display: 'block', fontWeight: 'bold', color: '#1e293b', marginBottom: '0.4rem', fontSize: '0.875rem' }}>
+                    Fecha de Registro
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', alignItems: 'center' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Tipo</label>
+                      <select
+                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
+                        value={prodPreset}
+                        onChange={e => setProdPreset(e.target.value)}
+                      >
+                        <option value="anual">Anual</option>
+                        <option value="semestral">Semestral</option>
+                        <option value="mensual">Mensual</option>
+                        <option value="personalizado">Personalizado</option>
+                      </select>
+                    </div>
+
+                    {prodPreset === "anual" && (
+                      <div>
+                        <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Año</label>
+                        <input
+                          type="number"
+                          style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
+                          value={prodAnio}
+                          onChange={e => setProdAnio(parseInt(e.target.value) || today.getFullYear())}
+                        />
+                      </div>
+                    )}
+
+                    {prodPreset === "semestral" && (
+                      <>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Semestre</label>
+                          <select
+                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
+                            value={prodSemestre}
+                            onChange={e => setProdSemestre(parseInt(e.target.value))}
+                          >
+                            <option value={1}>1er Semestre (Ene-Jun)</option>
+                            <option value={2}>2do Semestre (Jul-Dic)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Año</label>
+                          <input
+                            type="number"
+                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
+                            value={prodAnio}
+                            onChange={e => setProdAnio(parseInt(e.target.value) || today.getFullYear())}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {prodPreset === "mensual" && (
+                      <>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Mes</label>
+                          <select
+                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
+                            value={prodMes}
+                            onChange={e => setProdMes(parseInt(e.target.value))}
+                          >
+                            {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m, i) => (
+                              <option key={i} value={i}>{m}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Año</label>
+                          <input
+                            type="number"
+                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
+                            value={prodAnio}
+                            onChange={e => setProdAnio(parseInt(e.target.value) || today.getFullYear())}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Fecha Asignada</label>
+                      <input
+                        type="date"
+                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
+                        value={productFechaCreacion}
+                        onChange={e => {
+                          setProductFechaCreacion(e.target.value);
+                          setProdPreset("personalizado");
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className={`${styles.formGroup} ${styles.formGroupFull}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', gridColumn: '1 / -1' }}>
-                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Descripción</label>
-                  <input type="text" name="descripcion" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="Ej: Caramelo duro..." value={productFormData.descripcion} onChange={handleProductInputChange} />
+                {/* Campos Código & Nombre */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Código *</label>
+                    <input
+                      required
+                      type="text"
+                      name="codigo"
+                      style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
+                      placeholder="PROD-006"
+                      value={productFormData.codigo}
+                      onChange={handleProductInputChange}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Nombre *</label>
+                    <input
+                      required
+                      type="text"
+                      name="nombre"
+                      style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
+                      placeholder="Nombre del producto"
+                      value={productFormData.nombre}
+                      onChange={handleProductInputChange}
+                    />
+                  </div>
                 </div>
 
-                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Marca</label>
-                  <input type="text" name="marca" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} placeholder="Ej: Arcor" value={productFormData.marca} onChange={handleProductInputChange} />
+                {/* Descripción */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Descripción</label>
+                  <input
+                    type="text"
+                    name="descripcion"
+                    style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
+                    placeholder="Ej: Caramelo duro..."
+                    value={productFormData.descripcion}
+                    onChange={handleProductInputChange}
+                  />
                 </div>
 
-                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Stock Inicial *</label>
-                  <input required type="number" min="0" step="1" name="stock" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} value={productFormData.stock} onChange={handleProductInputChange} />
+                {/* Marca & Stock Inicial */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Marca</label>
+                    <input
+                      type="text"
+                      name="marca"
+                      style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
+                      placeholder="Ej: Arcor"
+                      value={productFormData.marca}
+                      onChange={handleProductInputChange}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Stock Inicial *</label>
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      step="1"
+                      name="stock"
+                      style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
+                      value={productFormData.stock}
+                      onChange={handleProductInputChange}
+                    />
+                  </div>
                 </div>
 
-                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Costo (Bs) *</label>
-                  <input required type="number" min="0" step="0.01" name="costo" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} value={productFormData.costo} onChange={handleProductInputChange} />
-                </div>
-                <div className={styles.formGroup} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label className={styles.formLabel} style={{ fontSize: '0.875rem', fontWeight: 600 }}>Precio de Venta (Bs) *</label>
-                      <button type="button" onClick={calcularDIMProduct} style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', borderRadius: '4px', padding: '0.1rem 0.4rem', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                {/* Costo & Precio de Venta */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Costo (Bs) *</label>
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="costo"
+                      style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
+                      value={productFormData.costo}
+                      onChange={handleProductInputChange}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155', margin: 0 }}>Precio de Venta (Bs) *</label>
+                      <button
+                        type="button"
+                        onClick={calcularDIMProduct}
+                        style={{
+                          background: '#fff7ed',
+                          color: '#ea580c',
+                          border: '1px solid #fed7aa',
+                          borderRadius: '4px',
+                          padding: '0.15rem 0.45rem',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          fontWeight: 600
+                        }}
+                      >
                         <Calculator size={12} /> Calc. DIM
                       </button>
                     </div>
-                  <input required type="number" min="0" step="0.01" name="precioVenta" className={styles.formInput} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px' }} value={productFormData.precioVenta} onChange={handleProductInputChange} />
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="precioVenta"
+                      style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
+                      value={productFormData.precioVenta}
+                      onChange={handleProductInputChange}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className={styles.modalFooter} style={{ padding: '1rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: '#f8fafc', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px' }}>
-                <button type="button" className={styles.btnCancel} style={{ padding: '0.5rem 1rem', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '4px', cursor: 'pointer' }} onClick={() => setIsProductModalOpen(false)}>
+              {/* Footer: fixed / flexShrink 0 */}
+              <div style={{
+                padding: '1rem 1.5rem',
+                borderTop: '1px solid #e2e8f0',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '1rem',
+                background: '#f8fafc',
+                flexShrink: 0
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setIsProductModalOpen(false)}
+                  style={{
+                    padding: '0.6rem 1.25rem',
+                    border: '1px solid #cbd5e1',
+                    background: '#fff',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    color: '#475569'
+                  }}
+                >
                   Cancelar
                 </button>
-                <button type="submit" className={styles.btnSave} style={{ padding: '0.5rem 1rem', border: 'none', background: 'var(--color-primary)', color: '#fff', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }} disabled={productLoading}>
+                <button
+                  type="submit"
+                  disabled={productLoading}
+                  style={{
+                    padding: '0.6rem 1.25rem',
+                    border: 'none',
+                    background: 'var(--color-primary)',
+                    color: '#fff',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
                   {productLoading ? "Guardando..." : "Guardar Producto"}
                 </button>
               </div>
