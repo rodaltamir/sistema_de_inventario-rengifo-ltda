@@ -24,9 +24,13 @@ export default async function HistorialPage() {
     orderBy: { fecha: 'desc' }
   });
 
+  const productos = await tenantPrisma.producto.findMany({
+    orderBy: { nombre: 'asc' }
+  });
+
   return (
     <div className="page-container">
-      <HistorialClient transacciones={transacciones} />
+      <HistorialClient transacciones={transacciones} productos={productos} />
     </div>
   );
 }

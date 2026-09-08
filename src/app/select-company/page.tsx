@@ -2,11 +2,11 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import styles from "./select.module.css";
 import { 
   Building, Plus, Package, Store, Factory, ShoppingCart, 
-  Coffee, Laptop, Briefcase, Camera, Music, Book, Edit2, Trash2, Upload, Search
+  Coffee, Laptop, Briefcase, Camera, Music, Book, Edit2, Trash2, Upload, Search, RefreshCw
 } from "lucide-react";
 import Swal from 'sweetalert2';
 
@@ -33,6 +33,9 @@ export default function SelectCompanyPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [fetchingTenants, setFetchingTenants] = useState(false);
+
   const defaultForm = {
     name: "",
     nit: "",
@@ -45,6 +48,33 @@ export default function SelectCompanyPage() {
 
   const [formData, setFormData] = useState(defaultForm);
 
+  const loadTenants = async () => {
+    setFetchingTenants(true);
+    try {
+      const res = await fetch("/api/tenants", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.tenants && Array.isArray(data.tenants)) {
+          setTenants(data.tenants);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Error al cargar empresas:", err);
+    } finally {
+      setFetchingTenants(false);
+    }
+    if (session?.user?.tenants) {
+      setTenants(session.user.tenants);
+    }
+  };
+
+  useEffect(() => {
+    if (session?.user) {
+      loadTenants();
+    }
+  }, [session?.user]);
+
   if (status === "loading") return <p style={{textAlign: 'center', marginTop: '5rem'}}>Cargando...</p>;
   if (!session) {
     router.push('/login');
@@ -52,8 +82,14 @@ export default function SelectCompanyPage() {
   }
 
   const handleSelect = async (tenantId: string) => {
-    await update({ tenantId });
-    router.push("/dashboard");
+    setLoading(true);
+    try {
+      await update({ tenantId });
+      router.push("/dashboard");
+    } catch (err) {
+      console.error("Error al seleccionar empresa:", err);
+      setLoading(false);
+    }
   };
 
   const handleEdit = (tenant: any) => {
@@ -90,6 +126,7 @@ export default function SelectCompanyPage() {
         method: "DELETE"
       });
       if (res.ok) {
+        await loadTenants();
         await update({ action: 'refreshTenants' });
         Swal.fire('¡Eliminado!', 'La empresa ha sido eliminada.', 'success');
       } else {
@@ -124,11 +161,12 @@ export default function SelectCompanyPage() {
         body: JSON.stringify(payload)
       });
       if (res.ok) {
+        await loadTenants();
         await update({ action: 'refreshTenants' });
         setIsFormOpen(false);
         setEditingId(null);
         setFormData(defaultForm);
-        Swal.fire('¡Éxito!', editingId ? 'Empresa actualizada.' : 'Empresa creada.', 'success');
+        Swal.fire('¡Éxito!', editingId ? 'Empresa actualizada.' : 'Empresa creada con éxito en el sistema.', 'success');
       } else {
         const err = await res.json();
         Swal.fire('Error', "Error: " + (err.error || "Algo salió mal"), 'error');
@@ -162,18 +200,19 @@ export default function SelectCompanyPage() {
     setIsFormOpen(true);
   };
 
-  const filteredTenants = session?.user?.tenants?.filter((tenant: any) => 
+  const allTenantsList = tenants.length > 0 ? tenants : (session?.user?.tenants || []);
+  const filteredTenants = allTenantsList.filter((tenant: any) => 
     tenant.name.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  );
 
   return (
     <div className={styles.container}>
       <div className={`card ${styles.mainCard}`}>
         <h1 className={styles.title}>Selecciona la Empresa</h1>
         
-        {!isFormOpen && session?.user?.tenants && session.user.tenants.length > 0 && (
-          <div className={styles.searchContainer}>
-            <div className={styles.searchWrapper}>
+        {!isFormOpen && (
+          <div className={styles.searchContainer} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <div className={styles.searchWrapper} style={{ flex: 1 }}>
               <Search size={18} className={styles.searchIcon} />
               <input 
                 type="text" 
@@ -183,6 +222,28 @@ export default function SelectCompanyPage() {
                 className={styles.searchInput}
               />
             </div>
+            <button
+              type="button"
+              onClick={loadTenants}
+              disabled={fetchingTenants}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.55rem 0.9rem",
+                borderRadius: "10px",
+                border: "1px solid #cbd5e1",
+                background: "#f8fafc",
+                color: "#334155",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+              }}
+              title="Sincronizar y actualizar listado de empresas con el servidor"
+            >
+              <RefreshCw size={15} style={{ animation: fetchingTenants ? "spin 1s linear infinite" : "none" }} />
+              {fetchingTenants ? "Cargando..." : "Sincronizar"}
+            </button>
           </div>
         )}
         

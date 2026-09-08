@@ -155,7 +155,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     });
 
     filteredMovs.forEach(m => {
-      const isImportacion = m.transaccion.tipoTransaccion === 'SALDO INICIAL' || m.transaccion.tipoTransaccion === 'IMPORTACIÓN INICIAL';
+      const isImportacion = m.transaccion.tipoTransaccion === 'SALDO INICIAL' || m.transaccion.tipoTransaccion === 'IMPORTACIÓN INICIAL' || m.transaccion.tipoTransaccion === 'INVENTARIO INICIAL';
       const isCompra = isImportacion || m.transaccion.tipoTransaccion === 'COMPRA' || m.transaccion.tipoTransaccion === 'ENTRADA';
       const isHistorico = m.transaccion.nroDocumento && m.transaccion.nroDocumento.startsWith('IMP-');
         const date = new Date(m.transaccion.fecha);

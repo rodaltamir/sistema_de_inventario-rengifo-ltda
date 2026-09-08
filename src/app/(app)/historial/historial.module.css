@@ -176,6 +176,7 @@
   margin-top: 1rem;
 }
 
+
 .tableDetail th {
   background: #1f2937;
   color: white;
@@ -190,3 +191,347 @@
   font-size: 0.875rem;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btnImport {
+  background: #059669;
+  color: white;
+  border: none;
+  padding: 0.55rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btnImport:hover {
+  background: #047857;
+}
+
+.badgeInicial {
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.modalLarge {
+  background: white;
+  border-radius: 12px;
+  width: 95%;
+  max-width: 1100px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.modalFooter {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--color-border);
+  background: #f9fafb;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.btnCancel {
+  background: white;
+  border: 1px solid var(--color-border);
+  color: #4b5563;
+  padding: 0.55rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btnCancel:hover {
+  background: #f3f4f6;
+}
+
+.btnSave {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 0.55rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btnSave:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btnSave:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnDownload {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 0.45rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btnDownload:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.statCard {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+
+.statLabel {
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 600;
+  display: block;
+}
+
+.statValue {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-top: 0.2rem;
+}
+
+.previewTableWrapper {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: auto;
+  max-height: 420px;
+}
+
+.previewTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.825rem;
+}
+
+.previewTable th {
+  position: sticky;
+  top: 0;
+  background: #f3f4f6;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 2px solid #e5e7eb;
+  color: #374151;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+.previewTable td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #f3f4f6;
+  color: #1f2937;
+  white-space: nowrap;
+}
+
+.previewTable tr:hover td {
+  background: #f9fafb;
+}
+
+.btnTrash {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 4px;
+}
+
+.btnTrash:hover {
+  background: #fee2e2;
+}
+
+.detectedBanner {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.detectedHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.detectedTitle {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btnToggleDrawer {
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  color: #15803d;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.15s ease;
+}
+
+.btnToggleDrawer:hover {
+  background: #bbf7d0;
+}
+
+.detectedGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.detectedCard {
+  background: #ffffff;
+  border: 1px solid #dcfce7;
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.detectedCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.detectedCodeBadge {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.detectedMovCount {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.detectedCardName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.25;
+}
+
+.detectedCardMeta {
+  font-size: 0.75rem;
+  color: #64748b;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.detectedCardSelect {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.8rem;
+  background: #fafafa;
+  color: #334155;
+}
+
+.filterControlsRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.filterGroup {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filterInput {
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 0.825rem;
+  min-width: 240px;
+}
+
+.filterSelect {
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 0.825rem;
+  background: white;
+  color: #374151;
+  font-weight: 500;
+}

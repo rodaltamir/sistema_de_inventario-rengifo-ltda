@@ -27,6 +27,8 @@ services:
       - NEXTAUTH_SECRET=b7d38392f9e42b6a1c8f0e5d4a9b2c7e8f1d3a6c9e0b4f5a
       # URL actualizada con el puerto 8080
       - NEXTAUTH_URL=http://Rengifo_Ltda:8080
+      - AUTH_TRUST_HOST=true
+      - NEXTAUTH_URL_INTERNAL=http://localhost:3000
     depends_on:
       - db
 

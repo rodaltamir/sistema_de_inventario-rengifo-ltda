@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package, Users, TrendingUp, ShoppingCart, Banknote, Download, FileText, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import styles from './dashboard.module.css';
@@ -33,6 +33,7 @@ type Transaccion = {
 
 type Proveedor = {
   id: string;
+  tipo?: string;
 };
 
 interface DashboardClientProps {
@@ -43,10 +44,27 @@ interface DashboardClientProps {
 
 export default function DashboardClient({ productos, proveedores, transacciones }: DashboardClientProps) {
   const router = useRouter();
-  const [tipoPeriodo, setTipoPeriodo] = useState<'Mensual' | 'Semestral' | 'Anual'>('Anual');
-  const [year, setYear] = useState(new Date().getFullYear());
+
+  // Elegir por defecto el año de la transacción más reciente si hay transacciones
+  const defaultYear = useMemo(() => {
+    if (transacciones && transacciones.length > 0) {
+      return new Date(transacciones[0].fecha).getFullYear();
+    }
+    return new Date().getFullYear();
+  }, [transacciones]);
+
+  const [tipoPeriodo, setTipoPeriodo] = useState<'Anual' | 'Historico' | 'Semestral' | 'Mensual'>('Anual');
+  const [year, setYear] = useState<number>(defaultYear);
   const [month, setMonth] = useState(new Date().getMonth());
   const [semester, setSemester] = useState(new Date().getMonth() < 6 ? 1 : 2);
+
+  // Sincronizar año cuando se reciban transacciones
+  useEffect(() => {
+    if (transacciones && transacciones.length > 0) {
+      const latestY = new Date(transacciones[0].fecha).getFullYear();
+      setYear(latestY);
+    }
+  }, [transacciones]);
 
   // Available years based on transactions or just recent ones
   const availableYears = useMemo(() => {
@@ -58,6 +76,7 @@ export default function DashboardClient({ productos, proveedores, transacciones 
   const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
   const periodoLabel = useMemo(() => {
+    if (tipoPeriodo === 'Historico') return 'Histórico Total';
     if (tipoPeriodo === 'Anual') return `Año ${year}`;
     if (tipoPeriodo === 'Semestral') return `${semester === 1 ? '1er' : '2do'} Sem. ${year}`;
     return `${meses[month]} ${year}`;
@@ -66,6 +85,8 @@ export default function DashboardClient({ productos, proveedores, transacciones 
   // Filter transactions by period
   const transaccionesFiltradas = useMemo(() => {
     return transacciones.filter(t => {
+      if (tipoPeriodo === 'Historico') return true;
+
       const d = new Date(t.fecha);
       const tYear = d.getFullYear();
       const tMonth = d.getMonth();
@@ -85,15 +106,18 @@ export default function DashboardClient({ productos, proveedores, transacciones 
 
   // Calculate Metrics
   const totalProductos = productos.length;
-  const totalProveedores = proveedores.length;
+  const totalContactos = proveedores.length;
+  const countProveedores = proveedores.filter(p => p.tipo !== 'CLIENTE').length;
+  const countClientes = proveedores.filter(p => p.tipo === 'CLIENTE').length;
   const valorTotalInventario = productos.reduce((sum, p) => sum + (p.stock * p.costo), 0);
 
   const totalVentas = transaccionesFiltradas
     .filter(t => t.tipoTransaccion === 'VENTA')
     .reduce((sum, t) => sum + t.detalles.reduce((acc, d) => acc + d.subtotal, 0) - t.descuento, 0);
 
+  // Incluir compras e inventario inicial en las entradas
   const totalCompras = transaccionesFiltradas
-    .filter(t => t.tipoTransaccion === 'COMPRA')
+    .filter(t => t.tipoTransaccion === 'COMPRA' || t.tipoTransaccion === 'INVENTARIO INICIAL' || t.tipoTransaccion === 'SALDO INICIAL')
     .reduce((sum, t) => sum + t.detalles.reduce((acc, d) => acc + d.subtotal, 0) - t.descuento, 0);
 
   // Sorting latest transactions
@@ -102,7 +126,7 @@ export default function DashboardClient({ productos, proveedores, transacciones 
     .slice(0, 5);
 
   // Stock alert
-  const productosBajoStock = productos.filter(p => p.stock === 0);
+  const productosBajoStock = productos.filter(p => p.stock <= 0);
 
   // Export PDF
   const handleExportPDF = () => {
@@ -116,7 +140,7 @@ export default function DashboardClient({ productos, proveedores, transacciones 
     // Summary
     doc.text(`Total Productos: ${totalProductos}`, 14, 40);
     doc.text(`Valor Inventario: Bs. ${valorTotalInventario.toFixed(2)}`, 14, 46);
-    doc.text(`Total Proveedores: ${totalProveedores}`, 14, 52);
+    doc.text(`Proveedores: ${countProveedores} | Clientes: ${countClientes}`, 14, 52);
     doc.text(`Ventas (${periodoLabel}): Bs. ${totalVentas.toFixed(2)}`, 100, 40);
     doc.text(`Compras (${periodoLabel}): Bs. ${totalCompras.toFixed(2)}`, 100, 46);
 
@@ -164,9 +188,10 @@ export default function DashboardClient({ productos, proveedores, transacciones 
               onChange={(e) => setTipoPeriodo(e.target.value as any)}
               className={styles.periodSelect}
             >
-              <option value="Mensual">Mensual</option>
-              <option value="Semestral">Semestral</option>
               <option value="Anual">Anual</option>
+              <option value="Historico">Todo el Historial</option>
+              <option value="Semestral">Semestral</option>
+              <option value="Mensual">Mensual</option>
             </select>
 
             {tipoPeriodo === 'Mensual' && (
@@ -192,15 +217,17 @@ export default function DashboardClient({ productos, proveedores, transacciones 
               </select>
             )}
 
-            <select 
-              value={year} 
-              onChange={(e) => setYear(Number(e.target.value))}
-              className={styles.periodSelect}
-            >
-              {availableYears.map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+            {tipoPeriodo !== 'Historico' && (
+              <select 
+                value={year} 
+                onChange={(e) => setYear(Number(e.target.value))}
+                className={styles.periodSelect}
+              >
+                {availableYears.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <button onClick={handleExportPDF} className={`${styles.exportBtn} ${styles.pdfBtn}`}>
@@ -242,9 +269,9 @@ export default function DashboardClient({ productos, proveedores, transacciones 
         <div className={styles.card}>
           <div className={styles.cardContent}>
             <div className={styles.cardText}>
-              <p className={styles.cardLabel}>COMPRAS ({periodoLabel.toUpperCase()})</p>
+              <p className={styles.cardLabel}>COMPRAS / ENTRADAS ({periodoLabel.toUpperCase()})</p>
               <h2 className={styles.cardValueDanger}>Bs. {totalCompras.toFixed(2)}</h2>
-              <span className={styles.cardTagDanger}>Egresos en {periodoLabel}</span>
+              <span className={styles.cardTagDanger}>Egresos e inicial en {periodoLabel}</span>
             </div>
             <div className={`${styles.iconWrapper} ${styles.iconGrey}`}>
               <ShoppingCart size={28} color="white" />
@@ -270,9 +297,17 @@ export default function DashboardClient({ productos, proveedores, transacciones 
         <div className={styles.card}>
           <div className={styles.cardContent}>
             <div className={styles.cardText}>
-              <p className={styles.cardLabel}>TOTAL PROVEEDORES</p>
-              <h2 className={styles.cardValueCyan}>{totalProveedores}</h2>
-              <span className={styles.cardTagCyan}>Aliados comerciales</span>
+              <p className={styles.cardLabel}>
+                {countClientes > 0 ? "CONTACTOS (PROV. / CLIENTES)" : "TOTAL PROVEEDORES"}
+              </p>
+              <h2 className={styles.cardValueCyan}>
+                {countClientes > 0 ? `${countProveedores} / ${countClientes}` : totalContactos}
+              </h2>
+              <span className={styles.cardTagCyan}>
+                {countClientes > 0
+                  ? `${countProveedores} prov. · ${countClientes} clientes`
+                  : "Aliados comerciales"}
+              </span>
             </div>
             <div className={`${styles.iconWrapper} ${styles.iconCyan}`}>
               <Users size={28} color="white" />
@@ -304,8 +339,14 @@ export default function DashboardClient({ productos, proveedores, transacciones 
                 {ultimosMovimientos.map((m) => (
                   <tr key={m.id}>
                     <td>
-                      <span className={`${styles.badge} ${m.tipoTransaccion === 'VENTA' ? styles.badgeSuccess : styles.badgeDanger}`}>
-                        {m.tipoTransaccion}
+                      <span className={`${styles.badge} ${
+                        m.tipoTransaccion === 'VENTA'
+                          ? styles.badgeSuccess
+                          : m.tipoTransaccion === 'INVENTARIO INICIAL'
+                          ? styles.badgePrimary
+                          : styles.badgeDanger
+                      }`}>
+                        {m.tipoTransaccion === 'INVENTARIO INICIAL' ? 'INV. INICIAL' : m.tipoTransaccion}
                       </span>
                     </td>
                     <td>{new Date(m.fecha).toLocaleDateString()}</td>
@@ -329,7 +370,7 @@ export default function DashboardClient({ productos, proveedores, transacciones 
           <div className={styles.alertHeader}>
             <div className={styles.alertTitle}>
               <AlertTriangle size={18} />
-              <h3>Alerta Bajo Stock</h3>
+              <h3>Alerta Bajo Stock ({productosBajoStock.length})</h3>
             </div>
             <button onClick={() => router.push('/productos')} className={styles.linkActionWarning}>Ir a Productos</button>
           </div>

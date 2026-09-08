@@ -26,20 +26,12 @@ export default async function DashboardPage() {
   
   const proveedores = await tenantPrisma.proveedor.findMany({
     select: {
-      id: true
+      id: true,
+      tipo: true
     }
   });
 
-  // Only fetch transactions from the last 2 years to avoid memory bloat
-  const currentYear = new Date().getFullYear();
-  const startDate = new Date(`${currentYear - 2}-01-01T00:00:00.000Z`);
-
   const transacciones = await tenantPrisma.transaccion.findMany({
-    where: {
-      fecha: {
-        gte: startDate
-      }
-    },
     select: {
       id: true,
       tipoTransaccion: true,

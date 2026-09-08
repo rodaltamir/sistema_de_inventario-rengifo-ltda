@@ -57,8 +57,35 @@ export const authOptions: NextAuthOptions = {
       if (trigger === "update") {
         if (session?.tenantId) {
           token.currentTenantId = session.tenantId;
-          const tenant = (token.tenants as any[]).find((t: any) => t.id === session.tenantId);
-          token.currentConnectionString = tenant?.connectionString;
+          // Buscar directamente en la BD maestra para garantizar siempre el connectionString fresco
+          const tenantDb = await masterPrisma.tenant.findUnique({
+            where: { id: session.tenantId }
+          });
+          if (tenantDb) {
+            token.currentConnectionString = tenantDb.connectionString;
+            const list = Array.isArray(token.tenants) ? [...token.tenants] : [];
+            const idx = list.findIndex((t: any) => t.id === tenantDb.id);
+            const tenantObj = {
+              id: tenantDb.id,
+              name: tenantDb.name,
+              nit: tenantDb.nit,
+              casaMatriz: tenantDb.casaMatriz,
+              sucursal: tenantDb.sucursal,
+              telefono: tenantDb.telefono,
+              logo: tenantDb.logo && tenantDb.logo.length > 255 ? "Building" : tenantDb.logo,
+              connectionString: tenantDb.connectionString,
+              isOwner: true
+            };
+            if (idx >= 0) {
+              list[idx] = tenantObj;
+            } else {
+              list.push(tenantObj);
+            }
+            token.tenants = list;
+          } else {
+            const tenant = (token.tenants as any[])?.find((t: any) => t.id === session.tenantId);
+            token.currentConnectionString = tenant?.connectionString;
+          }
         } else if (session?.action === 'refreshTenants') {
           // Refetch all tenants from DB for global access
           const dbUser = await masterPrisma.user.findUnique({
@@ -78,7 +105,7 @@ export const authOptions: NextAuthOptions = {
               telefono: t.telefono,
               logo: t.logo && t.logo.length > 255 ? "Building" : t.logo, // Prevents 431 error from base64
               connectionString: t.connectionString,
-              isOwner: userTenantIds.includes(t.id)
+              isOwner: userTenantIds.includes(t.id) || dbUser.role === 'SUPERADMIN'
             }));
           }
         }

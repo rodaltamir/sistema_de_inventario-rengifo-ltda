@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ShoppingCart, Download, FileText, Plus, Trash2, Calculator, Package, X } from "lucide-react";
+import Link from "next/link";
+import { ShoppingCart, Download, FileText, Plus, Trash2, Calculator, Package, X, Upload } from "lucide-react";
 import { procesarTransaccion } from "./actions";
 import { createProducto } from "../productos/actions";
 import { createProveedor } from "../proveedores/actions";
@@ -582,19 +583,41 @@ export default function TransaccionClient({
             <p className={styles.subtitle}>Registra compras y ventas con actualización de stock en tiempo real</p>
           </div>
 
-          <div className={styles.toggleGroup}>
-            <button
-              className={`${styles.toggleBtn} ${modo === "VENTA" ? styles.ventaActive : styles.inactive}`}
-              onClick={() => { setModo("VENTA"); setSinFactura(false); setNitCi(""); setRazonSocial(""); }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <Link
+              href="/historial?openImport=true"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                backgroundColor: '#059669',
+                color: '#ffffff',
+                padding: '0.6rem 1rem',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                textDecoration: 'none',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+              title="Importar transacciones masivamente desde plantilla Excel"
             >
-              <ShoppingCart size={18} /> REGISTRAR VENTA
-            </button>
-            <button
-              className={`${styles.toggleBtn} ${modo === "COMPRA" ? styles.compraActive : styles.inactive}`}
-              onClick={() => { setModo("COMPRA"); setSinFactura(false); setNitCi(""); setRazonSocial(""); }}
-            >
-              <Download size={18} /> REGISTRAR COMPRA
-            </button>
+              <Upload size={17} /> Importar desde Excel
+            </Link>
+
+            <div className={styles.toggleGroup}>
+              <button
+                className={`${styles.toggleBtn} ${modo === "VENTA" ? styles.ventaActive : styles.inactive}`}
+                onClick={() => { setModo("VENTA"); setSinFactura(false); setNitCi(""); setRazonSocial(""); }}
+              >
+                <ShoppingCart size={18} /> REGISTRAR VENTA
+              </button>
+              <button
+                className={`${styles.toggleBtn} ${modo === "COMPRA" ? styles.compraActive : styles.inactive}`}
+                onClick={() => { setModo("COMPRA"); setSinFactura(false); setNitCi(""); setRazonSocial(""); }}
+              >
+                <Download size={18} /> REGISTRAR COMPRA
+              </button>
+            </div>
           </div>
         </div>
 

@@ -6,8 +6,45 @@ import { exec } from "child_process";
 import util from "util";
 import crypto from "crypto";
 import { saveBase64Image } from "@/lib/upload";
+import { revalidatePath } from "next/cache";
 
 const execAsync = util.promisify(exec);
+
+export async function GET(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const allTenants = await masterPrisma.tenant.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { users: true }
+    });
+
+    const isSuperadmin = session.user.role === "SUPERADMIN";
+
+    const formattedTenants = allTenants.map((t) => {
+      const isOwner = isSuperadmin || t.users.some((u) => u.userId === session.user.id);
+      return {
+        id: t.id,
+        name: t.name,
+        nit: t.nit,
+        casaMatriz: t.casaMatriz,
+        sucursal: t.sucursal,
+        telefono: t.telefono,
+        logo: t.logo && t.logo.length > 255 ? "Building" : t.logo,
+        connectionString: t.connectionString,
+        isOwner
+      };
+    });
+
+    return NextResponse.json({ success: true, tenants: formattedTenants });
+  } catch (error: any) {
+    console.error("Error obteniendo tenants:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -54,13 +91,15 @@ export async function POST(req: Request) {
     });
 
     // 2. Ejecutar prisma db push para crear las tablas en el nuevo esquema
-    // Esto conectará a la BD con el connectionString y aplicará tenant.prisma
-    await execAsync(`npx prisma db push --schema=prisma/tenant.prisma --accept-data-loss`, {
+    // Con --skip-generate evitamos recompilar clientes locales en disco
+    await execAsync(`npx prisma db push --schema=prisma/tenant.prisma --accept-data-loss --skip-generate`, {
       env: {
         ...process.env,
         TENANT_DATABASE_URL: connectionString
       }
     });
+
+    revalidatePath("/select-company");
 
     return NextResponse.json({ success: true, tenant });
   } catch (error: any) {
