@@ -42,6 +42,7 @@ export async function importarTransacciones(
       success: true,
       count: 0,
       transactionsCreated: 0,
+      itemsAddedToExistingTransactions: 0,
       transactionsSkippedDuplicate: 0,
       productsCreated: 0,
       productsReused: 0,
@@ -378,26 +379,40 @@ export async function importarTransacciones(
       });
     }
 
-    gruposMap.get(claveGrupo)!.detalles.push({
-      productoCodigo: cod,
-      cantidad: m.cantidad,
-      precioUnitario: m.precioUnitario,
-      subtotal: m.subtotal
-    });
+    const grupo = gruposMap.get(claveGrupo)!;
+    const detExistente = grupo.detalles.find(
+      (d) => d.productoCodigo.trim().toLowerCase() === cod.toLowerCase()
+    );
+
+    if (detExistente) {
+      detExistente.cantidad += m.cantidad;
+      detExistente.subtotal += m.subtotal;
+      if (detExistente.cantidad > 0) {
+        detExistente.precioUnitario = Number((detExistente.subtotal / detExistente.cantidad).toFixed(4));
+      }
+    } else {
+      grupo.detalles.push({
+        productoCodigo: cod,
+        cantidad: m.cantidad,
+        precioUnitario: m.precioUnitario,
+        subtotal: m.subtotal
+      });
+    }
   }
 
   const listaTransacciones = Array.from(gruposMap.values());
   let transaccionesCreadasCount = 0;
+  let itemsAgregadosExistentesCount = 0;
   let transaccionesOmitidasDuplicadasCount = 0;
 
-  // 4. Insertar transacciones y pagos en lotes (chunks) evitando duplicados
+  // 4. Insertar transacciones y pagos en lotes (chunks) evitando duplicados por factura + producto
   const CHUNK_SIZE = 30;
   for (let i = 0; i < listaTransacciones.length; i += CHUNK_SIZE) {
     const chunk = listaTransacciones.slice(i, i + CHUNK_SIZE);
 
     await tenantPrisma.$transaction(async (tx) => {
       for (const tData of chunk) {
-        // DEDUPLICACIÓN: Comprobar si ya existe una transacción idéntica en el mismo día con el mismo N° documento y tipo
+        // DEDUPLICACIÓN INTELIGENTE: Comprobar si ya existe una transacción en el mismo día con el mismo N° documento y tipo
         const inicioDia = new Date(tData.fecha);
         inicioDia.setUTCHours(0, 0, 0, 0);
         const finDia = new Date(tData.fecha);
@@ -411,12 +426,75 @@ export async function importarTransacciones(
               gte: inicioDia,
               lte: finDia
             }
+          },
+          include: {
+            detalles: true
           }
         });
 
         if (txExistente) {
-          transaccionesOmitidasDuplicadasCount++;
-          continue; // Ya existe en la base de datos, omitir para no duplicar ventas/compras ni stock
+          // Obtener los códigos de los productos que YA están en la factura existente
+          const codigosEnTxExistente = new Set(
+            txExistente.detalles.map((d) => d.productoCodigo.trim().toLowerCase())
+          );
+
+          // Filtrar únicamente los productos que NO existen todavía en la factura
+          // (permitiendo que una misma factura contenga múltiples productos diferentes)
+          const detallesNuevos = tData.detalles.filter(
+            (d) => !codigosEnTxExistente.has(d.productoCodigo.trim().toLowerCase())
+          );
+
+          if (detallesNuevos.length === 0) {
+            // Todos los productos de esta factura ya estaban registrados (duplicado exacto de factura + producto)
+            transaccionesOmitidasDuplicadasCount++;
+            continue;
+          }
+
+          // Si hay productos nuevos que pertenecen a esta misma factura,
+          // los incorporamos como nuevos detalles a la transacción existente
+          for (const d of detallesNuevos) {
+            await tx.detalleTransaccion.create({
+              data: {
+                transaccionId: txExistente.id,
+                productoCodigo: d.productoCodigo,
+                cantidad: d.cantidad,
+                precioUnitario: d.precioUnitario,
+                subtotal: d.subtotal
+              }
+            });
+          }
+
+          // Registrar pago adicional correspondiente a los nuevos productos agregados a la factura
+          const totalNuevos = detallesNuevos.reduce((acc, d) => acc + d.subtotal, 0);
+          if (totalNuevos > 0) {
+            await tx.pago.create({
+              data: {
+                transaccionId: txExistente.id,
+                monto: totalNuevos,
+                fecha: tData.fecha,
+                observaciones: "Pago correspondiente a nuevos productos incorporados a la factura en importación"
+              }
+            });
+          }
+
+          // Si la factura existente tenía cliente/proveedor genérico y la nueva tiene nombre real, enriquecer
+          const esGenerico = (nombre: string) =>
+            !nombre ||
+            nombre === "CLIENTE GENERAL" ||
+            nombre === "PROVEEDOR GENERAL";
+
+          if (esGenerico(txExistente.razonSocial) && !esGenerico(tData.razonSocial)) {
+            await tx.transaccion.update({
+              where: { id: txExistente.id },
+              data: {
+                razonSocial: tData.razonSocial,
+                nitCi: tData.nitCi !== "0" ? tData.nitCi : txExistente.nitCi
+              }
+            });
+          }
+
+          itemsAgregadosExistentesCount += detallesNuevos.length;
+          continue;
         }
 
         const totalTx = tData.detalles.reduce((acc, d) => acc + d.subtotal, 0);
@@ -516,6 +594,7 @@ export async function importarTransacciones(
     success: true,
     count: movimientosValidos.length,
     transactionsCreated: transaccionesCreadasCount,
+    itemsAddedToExistingTransactions: itemsAgregadosExistentesCount,
     transactionsSkippedDuplicate: transaccionesOmitidasDuplicadasCount,
     productsCreated: productosCreadosCount,
     productsReused: productosReutilizadosSet.size,

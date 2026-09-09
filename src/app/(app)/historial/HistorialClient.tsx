@@ -502,9 +502,10 @@ export default function HistorialClient({
         html: `
           <p>Se procesaron correctamente <strong>${res.count}</strong> movimientos en el sistema.</p>
           <div style="margin-top: 0.75rem; font-size: 0.9rem; color: #334155; text-align: left; background: #f8fafc; padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid #e2e8f0; line-height: 1.6;">
-            <div>• Facturas / Transacciones registradas: <strong>${res.transactionsCreated}</strong></div>
-            ${res.transactionsSkippedDuplicate && res.transactionsSkippedDuplicate > 0 ? `<div style="color: #d97706; font-weight: 600;">• Transacciones omitidas (ya existían): <strong>${res.transactionsSkippedDuplicate}</strong></div>` : ""}
-            <div>• Productos existentes reutilizados: <strong style="color: #16a34a;">${res.productsReused || 0}</strong></div>
+            <div>• Nuevas Facturas / Transacciones registradas: <strong>${res.transactionsCreated}</strong></div>
+            ${res.itemsAddedToExistingTransactions && res.itemsAddedToExistingTransactions > 0 ? `<div style="color: #2563eb; font-weight: 600;">• Nuevos productos incorporados a facturas existentes: <strong>${res.itemsAddedToExistingTransactions}</strong></div>` : ""}
+            ${res.transactionsSkippedDuplicate && res.transactionsSkippedDuplicate > 0 ? `<div style="color: #d97706; font-weight: 600;">• Facturas omitidas (producto y factura ya existían): <strong>${res.transactionsSkippedDuplicate}</strong></div>` : ""}
+            <div>• Productos existentes en catálogo reutilizados: <strong style="color: #16a34a;">${res.productsReused || 0}</strong></div>
             <div>• Nuevos productos creados: <strong>${res.productsCreated}</strong></div>
             <div>• Nuevos clientes registrados: <strong>${res.clientsCreated || 0}</strong></div>
             <div>• Nuevos proveedores registrados: <strong>${res.providersCreated || 0}</strong></div>
