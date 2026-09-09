@@ -195,7 +195,7 @@ row.getCell('I').value = r.unidad;
         row.getCell('M').value = r.salidas > 0 ? Number(r.salidas) : '-';
         const puSalida = r.salidas > 0 ? (r.salidasBs / r.salidas) : 0;
         
-        row.getCell('P').value = Number(r.saldo);
+        row.getCell('P').value = Number(r.saldo != null ? r.saldo : 0);
 
         // Formato numérico entero para Cantidades
         ['J', 'M', 'P'].forEach(col => {
@@ -211,7 +211,7 @@ row.getCell('I').value = r.unidad;
            row.getCell('N').value = puSalida > 0 ? Number(puSalida.toFixed(6)) : '-';
            row.getCell('O').value = r.salidasBs > 0 ? Number(r.salidasBs.toFixed(6)) : '-';
            
-           row.getCell('Q').value = Number(r.saldoBs.toFixed(6));
+           row.getCell('Q').value = Number((r.saldoBs || 0).toFixed(6));
 
            // Formats
            ['K', 'L', 'N', 'O', 'Q'].forEach(col => {
