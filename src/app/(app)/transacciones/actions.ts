@@ -30,15 +30,10 @@ export async function procesarTransaccion(data: {
 
   const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
 
-  // Validate stock if VENTA
-  if (data.tipoTransaccion === "VENTA") {
-    for (const d of data.detalles) {
-      const p = await tenantPrisma.producto.findUnique({ where: { codigo: d.productoCodigo } });
-      if (!p) throw new Error(`Producto ${d.productoCodigo} no encontrado.`);
-      if (p.stock < d.cantidad) {
-        throw new Error(`Stock insuficiente para el producto ${p.nombre}. Disponible: ${p.stock}`);
-      }
-    }
+  // Check products exist
+  for (const d of data.detalles) {
+    const p = await tenantPrisma.producto.findUnique({ where: { codigo: d.productoCodigo } });
+    if (!p) throw new Error(`Producto ${d.productoCodigo} no encontrado.`);
   }
 
   // Calculate total
@@ -125,6 +120,9 @@ export async function procesarTransaccion(data: {
   });
 
   revalidatePath("/transacciones");
-  revalidatePath("/productos"); // since stock changed
+  revalidatePath("/productos");
+  revalidatePath("/historial");
+  revalidatePath("/kardex");
+  revalidatePath("/dashboard");
   return result;
 }

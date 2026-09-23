@@ -4,12 +4,19 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { 
   Search, ShoppingCart, Download, Eye, X, Upload, 
   Package, Trash2, Check, FileSpreadsheet,
-  ChevronDown, ChevronUp, Layers, Filter, Sparkles
+  ChevronDown, ChevronUp, Layers, Filter, Sparkles,
+  Pencil, Plus
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
 import * as XLSX from "xlsx";
 import styles from "./historial.module.css";
-import { importarTransacciones, MovimientoImportado } from "./actions";
+import { 
+  importarTransacciones, 
+  eliminarTransaccion, 
+  editarTransaccion, 
+  MovimientoImportado 
+} from "./actions";
 
 export interface DetectedProductInfo {
   codigo: string;
@@ -33,8 +40,19 @@ export default function HistorialClient({
   transacciones: any[]; 
   productos?: any[]; 
 }) {
+  const router = useRouter();
+  const [txList, setTxList] = useState<any[]>(transacciones);
+
+  useEffect(() => {
+    setTxList(transacciones);
+  }, [transacciones]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTx, setSelectedTx] = useState<any>(null);
+
+  // Estados de Edición
+  const [editingTx, setEditingTx] = useState<any>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Estados de Importación
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -64,11 +82,191 @@ export default function HistorialClient({
     }
   }, []);
 
-  const filteredTransacciones = transacciones.filter((tx) =>
+  const filteredTransacciones = txList.filter((tx) =>
     tx.nroDocumento.toLowerCase().includes(searchTerm.toLowerCase()) ||
     tx.razonSocial.toLowerCase().includes(searchTerm.toLowerCase()) ||
     tx.nitCi.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Manejador para eliminar transacción con reversión de stock
+  const handleDeleteTransaction = async (tx: any) => {
+    const result = await Swal.fire({
+      title: `¿Eliminar documento ${tx.nroDocumento}?`,
+      html: `
+        <div style="text-align: left; font-size: 0.9rem; color: #475569;">
+          <p>Esta acción eliminará la transacción <strong>${tx.nroDocumento}</strong> (${tx.tipoTransaccion}).</p>
+          <p style="margin-top: 8px;"><strong>Efecto en inventario:</strong> Se revertirá automáticamente el stock de los <strong>${tx.detalles?.length || 0}</strong> productos vinculados.</p>
+          <p style="color: #ef4444; font-weight: bold; margin-top: 8px;">Esta acción no se puede deshacer.</p>
+        </div>
+      `,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Sí, eliminar definitivamente",
+      cancelButtonText: "Cancelar"
+    });
+
+    if (result.isConfirmed) {
+      try {
+        Swal.showLoading();
+        await eliminarTransaccion(tx.id);
+        setTxList((prev) => prev.filter((item) => item.id !== tx.id));
+        if (selectedTx?.id === tx.id) {
+          setSelectedTx(null);
+        }
+        await Swal.fire({
+          icon: "success",
+          title: "¡Eliminado!",
+          text: `La transacción ${tx.nroDocumento} fue eliminada y el stock fue restaurado correctamente.`,
+          timer: 2000,
+          showConfirmButton: false
+        });
+        router.refresh();
+      } catch (err: any) {
+        Swal.fire("Error", err.message || "No se pudo eliminar la transacción", "error");
+      }
+    }
+  };
+
+  // Manejador para abrir el modal de edición
+  const handleStartEdit = (tx: any) => {
+    setEditingTx({
+      id: tx.id,
+      tipoTransaccion: tx.tipoTransaccion,
+      fecha: tx.fecha ? new Date(tx.fecha).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      nroDocumento: tx.nroDocumento,
+      razonSocial: tx.razonSocial,
+      nitCi: tx.nitCi,
+      formaPago: tx.formaPago || "EFECTIVO",
+      descuento: tx.descuento || 0,
+      observaciones: tx.observaciones || "",
+      detalles: tx.detalles && tx.detalles.length > 0
+        ? tx.detalles.map((d: any) => ({
+            productoCodigo: d.productoCodigo,
+            cantidad: d.cantidad,
+            precioUnitario: d.precioUnitario,
+            subtotal: d.subtotal || (d.cantidad * d.precioUnitario)
+          }))
+        : [
+            {
+              productoCodigo: productos[0]?.codigo || "",
+              cantidad: 1,
+              precioUnitario: productos[0]?.costo || 0,
+              subtotal: productos[0]?.costo || 0
+            }
+          ]
+    });
+  };
+
+  // Manejador para guardar los cambios de la transacción
+  const handleSaveEdit = async () => {
+    if (!editingTx) return;
+
+    if (!editingTx.nroDocumento?.trim()) {
+      return Swal.fire("Campo requerido", "El número de documento es obligatorio.", "warning");
+    }
+    if (!editingTx.razonSocial?.trim() || !editingTx.nitCi?.trim()) {
+      return Swal.fire("Campos requeridos", "El cliente/proveedor y NIT/CI son obligatorios.", "warning");
+    }
+    if (!editingTx.detalles || editingTx.detalles.length === 0) {
+      return Swal.fire("Sin productos", "La transacción debe contener al menos un producto.", "warning");
+    }
+    for (const d of editingTx.detalles) {
+      if (!d.productoCodigo) {
+        return Swal.fire("Producto no seleccionado", "Todos los ítems deben tener un producto válido.", "warning");
+      }
+      if (Number(d.cantidad) <= 0) {
+        return Swal.fire("Cantidad inválida", "La cantidad debe ser mayor a cero.", "warning");
+      }
+    }
+
+    setIsSavingEdit(true);
+    try {
+      await editarTransaccion(editingTx.id, {
+        tipoTransaccion: editingTx.tipoTransaccion,
+        nroDocumento: editingTx.nroDocumento.trim(),
+        fecha: editingTx.fecha,
+        nitCi: editingTx.nitCi.trim(),
+        razonSocial: editingTx.razonSocial.trim(),
+        formaPago: editingTx.formaPago,
+        descuento: Number(editingTx.descuento) || 0,
+        observaciones: editingTx.observaciones ? editingTx.observaciones.trim() : "",
+        detalles: editingTx.detalles.map((d: any) => ({
+          productoCodigo: d.productoCodigo,
+          cantidad: Math.round(Number(d.cantidad)),
+          precioUnitario: Number(d.precioUnitario) || 0,
+          subtotal: Math.round(Number(d.cantidad)) * (Number(d.precioUnitario) || 0)
+        }))
+      });
+
+      // Actualizar estado local reactivo
+      setTxList((prev) =>
+        prev.map((item) => {
+          if (item.id === editingTx.id) {
+            return {
+              ...item,
+              tipoTransaccion: editingTx.tipoTransaccion,
+              nroDocumento: editingTx.nroDocumento.trim(),
+              fecha: editingTx.fecha ? new Date(editingTx.fecha + "T12:00:00") : item.fecha,
+              nitCi: editingTx.nitCi.trim(),
+              razonSocial: editingTx.razonSocial.trim(),
+              formaPago: editingTx.formaPago,
+              descuento: Number(editingTx.descuento) || 0,
+              observaciones: editingTx.observaciones ? editingTx.observaciones.trim() : null,
+              detalles: editingTx.detalles.map((d: any, idx: number) => ({
+                id: item.detalles?.[idx]?.id || `temp-${idx}`,
+                transaccionId: item.id,
+                productoCodigo: d.productoCodigo,
+                cantidad: Math.round(Number(d.cantidad)),
+                precioUnitario: Number(d.precioUnitario) || 0,
+                subtotal: Math.round(Number(d.cantidad)) * (Number(d.precioUnitario) || 0),
+                producto: productos.find((p) => p.codigo === d.productoCodigo) || { nombre: d.productoCodigo }
+              }))
+            };
+          }
+          return item;
+        })
+      );
+
+      if (selectedTx?.id === editingTx.id) {
+        setSelectedTx({
+          ...selectedTx,
+          tipoTransaccion: editingTx.tipoTransaccion,
+          nroDocumento: editingTx.nroDocumento.trim(),
+          fecha: editingTx.fecha ? new Date(editingTx.fecha + "T12:00:00") : selectedTx.fecha,
+          nitCi: editingTx.nitCi.trim(),
+          razonSocial: editingTx.razonSocial.trim(),
+          formaPago: editingTx.formaPago,
+          descuento: Number(editingTx.descuento) || 0,
+          observaciones: editingTx.observaciones ? editingTx.observaciones.trim() : null,
+          detalles: editingTx.detalles.map((d: any, idx: number) => ({
+            id: selectedTx.detalles?.[idx]?.id || `temp-${idx}`,
+            transaccionId: selectedTx.id,
+            productoCodigo: d.productoCodigo,
+            cantidad: Math.round(Number(d.cantidad)),
+            precioUnitario: Number(d.precioUnitario) || 0,
+            subtotal: Math.round(Number(d.cantidad)) * (Number(d.precioUnitario) || 0),
+            producto: productos.find((p) => p.codigo === d.productoCodigo) || { nombre: d.productoCodigo }
+          }))
+        });
+      }
+
+      setEditingTx(null);
+      await Swal.fire({
+        icon: "success",
+        title: "¡Guardado!",
+        text: "La transacción se actualizó exitosamente y el stock fue recalculado.",
+        timer: 2000,
+        showConfirmButton: false
+      });
+      router.refresh();
+    } catch (err: any) {
+      Swal.fire("Error al actualizar", err.message || "Ocurrió un error inesperado", "error");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   // Parseador de fechas ultra robusto (serials de Excel, DD/MM/YYYY, ISO, Date instances)
   const parseDateString = (rawVal: any, fmtVal: any): string => {
@@ -610,7 +808,7 @@ export default function HistorialClient({
               <th>NIT/CI</th>
               <th>Forma de Pago</th>
               <th>Total (Bs.)</th>
-              <th>Detalles</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -642,9 +840,17 @@ export default function HistorialClient({
                   </td>
                   <td style={{ fontWeight: "bold" }}>Bs. {total.toFixed(2)}</td>
                   <td>
-                    <button className={styles.btnView} onClick={() => setSelectedTx(tx)}>
-                      <Eye size={16} /> Ver Items
-                    </button>
+                    <div className={styles.actionsGroup}>
+                      <button className={styles.btnView} onClick={() => setSelectedTx(tx)} title="Ver detalles y productos">
+                        <Eye size={15} /> Ver
+                      </button>
+                      <button className={styles.btnEdit} onClick={() => handleStartEdit(tx)} title="Editar transacción y productos">
+                        <Pencil size={15} /> Editar
+                      </button>
+                      <button className={styles.btnDelete} onClick={() => handleDeleteTransaction(tx)} title="Eliminar transacción y revertir stock">
+                        <Trash2 size={15} /> Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -757,18 +963,346 @@ export default function HistorialClient({
                 </tbody>
               </table>
 
-              <div style={{ textAlign: "right", marginTop: "1rem", fontSize: "1.1rem" }}>
-                <div>
-                  <strong>Descuento: </strong> Bs. {selectedTx.descuento.toFixed(2)}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "1.5rem", paddingTop: "1rem", borderTop: "1px solid #e2e8f0", flexWrap: "wrap", gap: "1rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    className={styles.btnEdit}
+                    onClick={() => {
+                      const txToEdit = selectedTx;
+                      setSelectedTx(null);
+                      handleStartEdit(txToEdit);
+                    }}
+                    title="Editar esta transacción"
+                  >
+                    <Pencil size={15} /> Editar Transacción
+                  </button>
+                  <button
+                    className={styles.btnDelete}
+                    onClick={() => handleDeleteTransaction(selectedTx)}
+                    title="Eliminar esta transacción y revertir stock"
+                  >
+                    <Trash2 size={15} /> Eliminar Transacción
+                  </button>
                 </div>
-                <div style={{ fontSize: "1.25rem", color: "#16a34a", marginTop: "0.5rem" }}>
-                  <strong>Total Pagado / Valor: </strong> Bs.{" "}
-                  {(
-                    selectedTx.detalles.reduce((acc: number, d: any) => acc + d.subtotal, 0) -
-                    selectedTx.descuento
-                  ).toFixed(2)}
+
+                <div style={{ textAlign: "right", fontSize: "1.05rem" }}>
+                  <div>
+                    <strong>Descuento: </strong> Bs. {selectedTx.descuento.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: "1.25rem", color: "#16a34a", marginTop: "0.4rem", fontWeight: 700 }}>
+                    <strong>Total Pagado / Valor: </strong> Bs.{" "}
+                    {(
+                      selectedTx.detalles.reduce((acc: number, d: any) => acc + d.subtotal, 0) -
+                      selectedTx.descuento
+                    ).toFixed(2)}
+                  </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edición de Transacción */}
+      {editingTx && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.editModalContent}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2 className={styles.modalHeaderTitle} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <Pencil size={20} color="#2563eb" /> Editar Transacción
+                </h2>
+                <p style={{ fontSize: "0.85rem", color: "#64748b", margin: "0.2rem 0 0" }}>
+                  Documento: <strong>{editingTx.nroDocumento}</strong> &bull; El stock de los productos se actualizará automáticamente con las diferencias.
+                </p>
+              </div>
+              <button
+                style={{ background: "none", border: "none", cursor: "pointer" }}
+                onClick={() => setEditingTx(null)}
+                disabled={isSavingEdit}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody} style={{ padding: "1.25rem", overflowY: "auto", maxHeight: "calc(92vh - 140px)" }}>
+              {/* Formulario de Cabecera */}
+              <div className={styles.editFormGrid}>
+                <div className={styles.editFieldGroup}>
+                  <label className={styles.editLabel}>Tipo de Transacción</label>
+                  <select
+                    className={styles.editSelect}
+                    value={editingTx.tipoTransaccion}
+                    onChange={(e) => setEditingTx({ ...editingTx, tipoTransaccion: e.target.value })}
+                  >
+                    <option value="VENTA">VENTA</option>
+                    <option value="COMPRA">COMPRA</option>
+                    <option value="INVENTARIO INICIAL">INVENTARIO INICIAL</option>
+                    <option value="SALDO INICIAL">SALDO INICIAL</option>
+                  </select>
+                </div>
+
+                <div className={styles.editFieldGroup}>
+                  <label className={styles.editLabel}>Fecha</label>
+                  <input
+                    type="date"
+                    className={styles.editInput}
+                    value={editingTx.fecha}
+                    onChange={(e) => setEditingTx({ ...editingTx, fecha: e.target.value })}
+                  />
+                </div>
+
+                <div className={styles.editFieldGroup}>
+                  <label className={styles.editLabel}>N° Documento *</label>
+                  <input
+                    type="text"
+                    className={styles.editInput}
+                    value={editingTx.nroDocumento}
+                    onChange={(e) => setEditingTx({ ...editingTx, nroDocumento: e.target.value })}
+                    placeholder="Ej. FAC-00123"
+                  />
+                </div>
+
+                <div className={styles.editFieldGroup}>
+                  <label className={styles.editLabel}>
+                    {editingTx.tipoTransaccion === "VENTA" ? "Cliente (Razón Social) *" : "Proveedor (Razón Social) *"}
+                  </label>
+                  <input
+                    type="text"
+                    className={styles.editInput}
+                    value={editingTx.razonSocial}
+                    onChange={(e) => setEditingTx({ ...editingTx, razonSocial: e.target.value })}
+                    placeholder="Nombre o Razón Social"
+                  />
+                </div>
+
+                <div className={styles.editFieldGroup}>
+                  <label className={styles.editLabel}>NIT / CI *</label>
+                  <input
+                    type="text"
+                    className={styles.editInput}
+                    value={editingTx.nitCi}
+                    onChange={(e) => setEditingTx({ ...editingTx, nitCi: e.target.value })}
+                    placeholder="Número de NIT o CI"
+                  />
+                </div>
+
+                <div className={styles.editFieldGroup}>
+                  <label className={styles.editLabel}>Forma de Pago</label>
+                  <select
+                    className={styles.editSelect}
+                    value={editingTx.formaPago}
+                    onChange={(e) => setEditingTx({ ...editingTx, formaPago: e.target.value })}
+                  >
+                    <option value="EFECTIVO">EFECTIVO</option>
+                    <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                    <option value="TARJETA">TARJETA</option>
+                    <option value="CREDITO">CRÉDITO</option>
+                    <option value="OTRO">OTRO</option>
+                  </select>
+                </div>
+
+                <div className={styles.editFieldGroup} style={{ gridColumn: "1 / -1" }}>
+                  <label className={styles.editLabel}>Observaciones</label>
+                  <input
+                    type="text"
+                    className={styles.editInput}
+                    value={editingTx.observaciones}
+                    onChange={(e) => setEditingTx({ ...editingTx, observaciones: e.target.value })}
+                    placeholder="Notas u observaciones de la transacción (opcional)"
+                  />
+                </div>
+              </div>
+
+              {/* Sección de Ítems / Productos */}
+              <div className={styles.editItemsHeader}>
+                <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "#1e293b", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <Package size={18} color="#2563eb" /> Productos de la Transacción ({editingTx.detalles.length})
+                </h3>
+                <button
+                  type="button"
+                  className={styles.btnAddItem}
+                  onClick={() => {
+                    const firstProd = productos[0]?.codigo || "";
+                    const firstProdCost = productos[0]?.costo || 0;
+                    setEditingTx({
+                      ...editingTx,
+                      detalles: [
+                        ...editingTx.detalles,
+                        {
+                          productoCodigo: firstProd,
+                          cantidad: 1,
+                          precioUnitario: firstProdCost,
+                          subtotal: firstProdCost
+                        }
+                      ]
+                    });
+                  }}
+                >
+                  <Plus size={16} /> Agregar Producto
+                </button>
+              </div>
+
+              <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
+                <table className={styles.table} style={{ margin: 0 }}>
+                  <thead>
+                    <tr style={{ background: "#f1f5f9" }}>
+                      <th style={{ minWidth: "250px" }}>Producto</th>
+                      <th style={{ width: "120px" }}>Cantidad</th>
+                      <th style={{ width: "150px" }}>Precio Unit. (Bs.)</th>
+                      <th style={{ width: "140px" }}>Subtotal (Bs.)</th>
+                      <th style={{ width: "60px", textAlign: "center" }}>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editingTx.detalles.map((d: any, idx: number) => {
+                      return (
+                        <tr key={idx}>
+                          <td>
+                            <select
+                              className={styles.editSelect}
+                              style={{ width: "100%" }}
+                              value={d.productoCodigo}
+                              onChange={(e) => {
+                                const newCode = e.target.value;
+                                const prodObj = productos.find(p => p.codigo === newCode);
+                                const defaultPrice = editingTx.tipoTransaccion === "VENTA"
+                                  ? (prodObj?.precioVenta || prodObj?.costo || 0)
+                                  : (prodObj?.costo || 0);
+                                const updatedDetalles = [...editingTx.detalles];
+                                updatedDetalles[idx] = {
+                                  ...updatedDetalles[idx],
+                                  productoCodigo: newCode,
+                                  precioUnitario: d.precioUnitario > 0 ? d.precioUnitario : defaultPrice,
+                                  subtotal: Number(d.cantidad) * (d.precioUnitario > 0 ? d.precioUnitario : defaultPrice)
+                                };
+                                setEditingTx({ ...editingTx, detalles: updatedDetalles });
+                              }}
+                            >
+                              {productos.map(p => (
+                                <option key={p.codigo} value={p.codigo}>
+                                  {p.codigo} - {p.nombre} (Stock: {p.stock})
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              className={styles.editInput}
+                              style={{ width: "100%" }}
+                              value={d.cantidad}
+                              onChange={(e) => {
+                                const newQty = Math.max(1, parseInt(e.target.value) || 1);
+                                const updatedDetalles = [...editingTx.detalles];
+                                updatedDetalles[idx] = {
+                                  ...updatedDetalles[idx],
+                                  cantidad: newQty,
+                                  subtotal: newQty * Number(d.precioUnitario || 0)
+                                };
+                                setEditingTx({ ...editingTx, detalles: updatedDetalles });
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              className={styles.editInput}
+                              style={{ width: "100%" }}
+                              value={d.precioUnitario}
+                              onChange={(e) => {
+                                const newPrice = Math.max(0, parseFloat(e.target.value) || 0);
+                                const updatedDetalles = [...editingTx.detalles];
+                                updatedDetalles[idx] = {
+                                  ...updatedDetalles[idx],
+                                  precioUnitario: newPrice,
+                                  subtotal: Number(d.cantidad || 0) * newPrice
+                                };
+                                setEditingTx({ ...editingTx, detalles: updatedDetalles });
+                              }}
+                            />
+                          </td>
+                          <td style={{ fontWeight: "bold", color: "#0f172a" }}>
+                            Bs. {(Number(d.cantidad || 0) * Number(d.precioUnitario || 0)).toFixed(2)}
+                          </td>
+                          <td style={{ textAlign: "center" }}>
+                            <button
+                              type="button"
+                              className={styles.btnDelete}
+                              style={{ padding: "0.35rem 0.5rem" }}
+                              disabled={editingTx.detalles.length <= 1}
+                              title={editingTx.detalles.length <= 1 ? "Debe haber al menos un producto" : "Remover fila"}
+                              onClick={() => {
+                                if (editingTx.detalles.length <= 1) return;
+                                const updatedDetalles = editingTx.detalles.filter((_: any, i: number) => i !== idx);
+                                setEditingTx({ ...editingTx, detalles: updatedDetalles });
+                              }}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Resumen de Totales y Descuento */}
+              <div className={styles.editSummaryRow}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <label className={styles.editLabel} style={{ minWidth: "100px" }}>Descuento (Bs.):</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className={styles.editInput}
+                    style={{ width: "140px" }}
+                    value={editingTx.descuento}
+                    onChange={(e) => setEditingTx({ ...editingTx, descuento: Math.max(0, parseFloat(e.target.value) || 0) })}
+                  />
+                </div>
+
+                <div style={{ textAlign: "right" }}>
+                  {(() => {
+                    const subtotalGen = editingTx.detalles.reduce((acc: number, d: any) => acc + (Number(d.cantidad || 0) * Number(d.precioUnitario || 0)), 0);
+                    const totalGen = Math.max(0, subtotalGen - (Number(editingTx.descuento) || 0));
+                    return (
+                      <div>
+                        <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                          Subtotal: Bs. {subtotalGen.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#16a34a", marginTop: "0.2rem" }}>
+                          Total General: Bs. {totalGen.toFixed(2)}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.editModalFooter}>
+              <button
+                type="button"
+                className={styles.btnCancel}
+                onClick={() => setEditingTx(null)}
+                disabled={isSavingEdit}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={styles.btnSave}
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+              >
+                {isSavingEdit ? "Guardando..." : "Guardar Cambios"}
+              </button>
             </div>
           </div>
         </div>

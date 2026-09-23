@@ -136,12 +136,24 @@ export async function POST(req: Request) {
       worksheet.getCell('E9').value = resumenRows.length > 0 ? (resumenRows[0].metodoInventario || 'Promedio Ponderado') : 'Promedio Ponderado';
 
       if (!conImportes) {
-         // Ocultar las columnas relacionadas con importes
-         worksheet.getColumn('K').hidden = true;
-         worksheet.getColumn('L').hidden = true;
-         worksheet.getColumn('N').hidden = true;
-         worksheet.getColumn('O').hidden = true;
-         worksheet.getColumn('Q').hidden = true;
+        try { worksheet.unMergeCells('J11:L11'); } catch(e) {}
+        try { worksheet.unMergeCells('M11:O11'); } catch(e) {}
+        try { worksheet.unMergeCells('P11:Q11'); } catch(e) {}
+
+        worksheet.getCell('J11').value = 'ENTRADAS';
+        worksheet.getCell('M11').value = 'SALIDAS';
+        worksheet.getCell('P11').value = 'SALDO';
+
+        worksheet.getCell('J12').value = 'CANTIDAD';
+        worksheet.getCell('M12').value = 'CANTIDAD';
+        worksheet.getCell('P12').value = 'SALDO STOCK';
+
+        // Ocultar las columnas relacionadas con importes
+        worksheet.getColumn('K').hidden = true;
+        worksheet.getColumn('L').hidden = true;
+        worksheet.getColumn('N').hidden = true;
+        worksheet.getColumn('O').hidden = true;
+        worksheet.getColumn('Q').hidden = true;
       }
 
       let currentRow = 13;
@@ -345,14 +357,27 @@ row.getCell('I').value = r.unidad;
       }
 
       if (!conImportes) {
-        worksheet.getCell('I16').value = ''; // P/U
-        worksheet.getCell('J16').value = ''; // TOTAL
-        worksheet.getCell('L16').value = ''; // P/U
-        worksheet.getCell('M16').value = ''; // TOTAL
-        worksheet.getCell('O15').value = ''; // TOTAL BS
-        worksheet.getCell('O16').value = ''; // TOTAL BS
-      } else {
-        // ...
+        try { worksheet.unMergeCells('G14:I14'); } catch(e) {}
+        try { worksheet.unMergeCells('J14:L14'); } catch(e) {}
+        try { worksheet.unMergeCells('M14:N14'); } catch(e) {}
+
+        worksheet.getCell('G14').value = 'ENTRADAS';
+        worksheet.getCell('J14').value = 'SALIDAS';
+        worksheet.getCell('M14').value = 'SALDO';
+
+        worksheet.getCell('G15').value = 'CANTIDAD';
+        worksheet.getCell('J15').value = 'CANTIDAD';
+        worksheet.getCell('M15').value = 'SALDO STOCK';
+
+        worksheet.getCell('G16').value = 'CANTIDAD';
+        worksheet.getCell('J16').value = 'CANTIDAD';
+        worksheet.getCell('M16').value = 'SALDO STOCK';
+
+        worksheet.getColumn('H').hidden = true;
+        worksheet.getColumn('I').hidden = true;
+        worksheet.getColumn('K').hidden = true;
+        worksheet.getColumn('L').hidden = true;
+        worksheet.getColumn('N').hidden = true;
       }
 
       // Insert movements
@@ -360,9 +385,6 @@ row.getCell('I').value = r.unidad;
       const styleRow = worksheet.getRow(17);
 
       let movimientosList = [...movimientos];
-      if (mostrarSaldoInicial === false && movimientosList.length > 0 && movimientosList[0].movimiento === 'SALDO INICIAL') {
-        movimientosList.shift();
-      }
 
       movimientosList.forEach((mov: any, index: number) => {
         const row = worksheet.getRow(currentRow);
@@ -442,19 +464,6 @@ row.getCell('I').value = r.unidad;
           row.getCell('N').value = '-';
         }
 
-        if (!conImportes) {
-           ['H14','I14','K14','L14','N14', 'H15','I15','K15','L15','N15', 'H16','I16','K16','L16','N16'].forEach(c => {
-               const cell = worksheet.getCell(c);
-               cell.value = '';
-               cell.style = {}; 
-           });
-           worksheet.getColumn('H').hidden = true;
-           worksheet.getColumn('I').hidden = true;
-           worksheet.getColumn('K').hidden = true;
-           worksheet.getColumn('L').hidden = true;
-           worksheet.getColumn('N').hidden = true;
-        }
-
         ['A','B','C','D','E','F','G','H','I','J','K','L','M','N'].forEach(col => {
            const cell = row.getCell(col);
            cell.border = {
@@ -520,28 +529,31 @@ row.getCell('I').value = r.unidad;
         finalRow.getCell('J').alignment = { ...finalRow.getCell('J').alignment,  horizontal: 'center', vertical: 'middle'  };
         if (totSalCant > 0) finalRow.getCell('J').numFmt = '#,##0';
 
+        const lastMov = movimientosList.length > 0 ? movimientosList[movimientosList.length - 1] : null;
+        const lastFisico = lastMov && lastMov.saldoFisico !== undefined && lastMov.saldoFisico !== '' ? Number(lastMov.saldoFisico) : 0;
+        const lastValorado = lastMov && lastMov.saldoBs !== undefined && lastMov.saldoBs !== '' ? Number(lastMov.saldoBs) : 0;
+
+        finalRow.getCell('M').value = lastFisico;
+        finalRow.getCell('M').font = { ...finalRow.getCell('M').font, bold: true };
+        finalRow.getCell('M').alignment = { ...finalRow.getCell('M').alignment, horizontal: 'center', vertical: 'middle' };
+        finalRow.getCell('M').numFmt = '#,##0';
+
         if (conImportes) {
           finalRow.getCell('H').value = '-';
           finalRow.getCell('I').value = totEntBs > 0 ? Number(totEntBs.toFixed(6)) : '-';
-          finalRow.getCell('I').numFmt = '#,##0.00';
+          if (totEntBs > 0) finalRow.getCell('I').numFmt = '#,##0.00';
           
           finalRow.getCell('K').value = '-';
           finalRow.getCell('L').value = totSalBs > 0 ? Number(totSalBs.toFixed(6)) : '-';
-          finalRow.getCell('L').numFmt = '#,##0.00';
+          if (totSalBs > 0) finalRow.getCell('L').numFmt = '#,##0.00';
           
-          finalRow.getCell('M').value = '-';
-          finalRow.getCell('N').value = Number(Number(movimientosList[movimientosList.length - 1].saldoBs).toFixed(6));
+          finalRow.getCell('N').value = Number(Number(lastValorado).toFixed(6));
           finalRow.getCell('N').numFmt = '#,##0.00';
           
-          ['H','I','K','L','M','N'].forEach(c => {
-             finalRow.getCell(c).font = { ...finalRow.getCell(c).font,  bold: true  };
-             finalRow.getCell(c).alignment = { ...finalRow.getCell(c).alignment,  horizontal: 'center', vertical: 'middle'  };
+          ['H','I','K','L','N'].forEach(c => {
+             finalRow.getCell(c).font = { ...finalRow.getCell(c).font, bold: true };
+             finalRow.getCell(c).alignment = { ...finalRow.getCell(c).alignment, horizontal: 'center', vertical: 'middle' };
           });
-        } else {
-          finalRow.getCell('M').value = movimientosList[movimientosList.length - 1].saldoFisico;
-          finalRow.getCell('M').font = { ...finalRow.getCell('M').font,  bold: true  };
-          finalRow.getCell('M').alignment = { ...finalRow.getCell('M').alignment,  horizontal: 'center', vertical: 'middle'  };
-          finalRow.getCell('M').numFmt = '#,##0';
         }
         
         ['B','C','D','E','F','G','H','I','J','K','L','M','N'].forEach(col => {

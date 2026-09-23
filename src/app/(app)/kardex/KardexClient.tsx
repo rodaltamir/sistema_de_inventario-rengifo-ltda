@@ -12,7 +12,46 @@ export default function KardexClient({ initialMovimientos, productos, categorias
   const [movimientos] = useState(initialMovimientos);
   
   const today = new Date();
-  
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const formatLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  // Helper to parse dates safely (handles YYYY-MM-DD or ISO strings without timezone jumps)
+  const parseSafeDate = (fechaStr: string | Date | null | undefined): Date | null => {
+    if (!fechaStr) return null;
+    if (fechaStr instanceof Date) return isNaN(fechaStr.getTime()) ? null : fechaStr;
+    if (typeof fechaStr === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fechaStr)) {
+        const [y, m, d] = fechaStr.split('-').map(Number);
+        return new Date(y, m - 1, d, 12, 0, 0);
+      }
+      const d = new Date(fechaStr);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+  };
+
+  // Map each product to its earliest existence date (min of createdAt and any transaction fecha)
+  const productEarliestDateMap = useMemo(() => {
+    const map = new Map<string, Date>();
+    productos.forEach(p => {
+      const d = parseSafeDate(p.createdAt);
+      if (d) map.set(p.codigo, d);
+    });
+    movimientos.forEach(m => {
+      const d = parseSafeDate(m.transaccion?.fecha);
+      if (d) {
+        const existing = map.get(m.productoCodigo);
+        if (!existing || d < existing) {
+          map.set(m.productoCodigo, d);
+        }
+      }
+    });
+    return map;
+  }, [productos, movimientos]);
+
+  const initStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const initEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
   // UI State for Filters
   const [selectedPreset, setSelectedPreset] = useState("mes");
   const [selectedAnio, setSelectedAnio] = useState(today.getFullYear());
@@ -22,8 +61,8 @@ export default function KardexClient({ initialMovimientos, productos, categorias
   const [productoUI, setProductoUI] = useState<string>("TODOS");
   const [categoriaUI, setCategoriaUI] = useState<string>("TODAS");
   const [movimientoUI, setMovimientoUI] = useState<string>("TODOS");
-  const [fechaInicioUI, setFechaInicioUI] = useState("");
-  const [fechaFinUI, setFechaFinUI] = useState("");
+  const [fechaInicioUI, setFechaInicioUI] = useState(formatLocal(initStart));
+  const [fechaFinUI, setFechaFinUI] = useState(formatLocal(initEnd));
   const [conImportes, setConImportes] = useState(false);
   const [mostrarSaldoInicial, setMostrarSaldoInicial] = useState(false);
 
@@ -32,8 +71,8 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     producto: "TODOS",
     categoria: "TODAS",
     movimiento: "TODOS",
-    fechaInicio: "",
-    fechaFin: "",
+    fechaInicio: formatLocal(initStart),
+    fechaFin: formatLocal(initEnd),
     preset: "mes",
     anio: today.getFullYear()
   });
@@ -62,15 +101,40 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       end = new Date(selectedAnio, 11, 31);
     }
 
-    // Adjust for local timezone to prevent off-by-one errors in toISOString
-    const formatLocal = (d: Date) => {
-       const pad = (n: number) => n.toString().padStart(2, '0');
-       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    };
-
     setFechaInicioUI(formatLocal(start));
     setFechaFinUI(formatLocal(end));
   }, [selectedPreset, selectedAnio, selectedMes, selectedSemestre]);
+
+  // Current upper date bound for UI selectors
+  const currentMaxDateUI = useMemo(() => {
+    if (fechaFinUI) {
+      const [y, mm, d] = fechaFinUI.split('-').map(Number);
+      return new Date(y, mm - 1, d, 23, 59, 59, 999);
+    }
+    return null;
+  }, [fechaFinUI]);
+
+  // Products available in UI dropdown (excludes future products relative to currentMaxDateUI)
+  const availableProductosUI = useMemo(() => {
+    return productos.filter(p => {
+      if (categoriaUI !== "TODAS" && p.categoriaId !== categoriaUI) return false;
+      if (currentMaxDateUI) {
+        const earliest = productEarliestDateMap.get(p.codigo);
+        if (earliest && earliest > currentMaxDateUI) return false;
+      }
+      return true;
+    });
+  }, [productos, categoriaUI, currentMaxDateUI, productEarliestDateMap]);
+
+  // Auto-reset selected product if it no longer exists in the filtered time window
+  useEffect(() => {
+    if (productoUI !== "TODOS") {
+      const exists = availableProductosUI.some(p => p.codigo === productoUI);
+      if (!exists) {
+        setProductoUI("TODOS");
+      }
+    }
+  }, [availableProductosUI, productoUI]);
 
   const handleSearch = () => {
     setAppliedFilters({
@@ -107,8 +171,20 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     const fInicio = appliedFilters.fechaInicio;
     const fFin = appliedFilters.fechaFin;
 
-    // We pre-filter products based on category (if applicable)
-    const validProductos = productos.filter(p => cFiltro === "TODAS" || p.categoriaId === cFiltro);
+    const maxAppliedDate = fFin ? (() => {
+      const [y, mm, d] = fFin.split('-').map(Number);
+      return new Date(y, mm - 1, d, 23, 59, 59, 999);
+    })() : null;
+
+    // Filter products: category and exclude products that only exist in future dates
+    const validProductos = productos.filter(p => {
+      if (cFiltro !== "TODAS" && p.categoriaId !== cFiltro) return false;
+      if (maxAppliedDate) {
+        const earliest = productEarliestDateMap.get(p.codigo);
+        if (earliest && earliest > maxAppliedDate) return false;
+      }
+      return true;
+    });
     validProductos.sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }));
     const validProductIds = new Set(validProductos.map(p => p.codigo));
 
@@ -120,11 +196,11 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       .sort((a, b) => new Date(a.transaccion.fecha).getTime() - new Date(b.transaccion.fecha).getTime());
 
     let saldoInicialFisico = 0;
-      let saldoInicialValorado = 0;
-      let saldoInicialEntFisico = 0;
-      let saldoInicialSalFisico = 0;
-      let saldoInicialEntValorado = 0;
-      let saldoInicialSalValorado = 0;
+    let saldoInicialValorado = 0;
+    let saldoInicialEntFisico = 0;
+    let saldoInicialSalFisico = 0;
+    let saldoInicialEntValorado = 0;
+    let saldoInicialSalValorado = 0;
 
     const rows: any[] = [];
     let currentFisico = 0;
@@ -162,7 +238,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       const isImportacion = m.transaccion.tipoTransaccion === 'SALDO INICIAL' || m.transaccion.tipoTransaccion === 'IMPORTACIÓN INICIAL' || m.transaccion.tipoTransaccion === 'INVENTARIO INICIAL';
       const isCompra = isImportacion || m.transaccion.tipoTransaccion === 'COMPRA' || m.transaccion.tipoTransaccion === 'ENTRADA';
       const isHistorico = m.transaccion.nroDocumento && m.transaccion.nroDocumento.startsWith('IMP-');
-      const date = new Date(m.transaccion.fecha);
+      const date = parseSafeDate(m.transaccion.fecha) || new Date(m.transaccion.fecha);
         
       const costoMovimiento = (isCompra || isHistorico) ? m.subtotal : (m.cantidad * m.producto.costo);
 
@@ -807,7 +883,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
                   onChange={(val) => setProductoUI(val)}
                   productos={[
                     { codigo: 'TODOS', nombre: 'TODOS LOS PRODUCTOS', descripcion: '', stock: '-', unidadMedida: '' },
-                    ...productos.filter(p => categoriaUI === "TODAS" || p.categoriaId === categoriaUI)
+                    ...availableProductosUI
                   ]}
                 />
               </div>
@@ -1154,27 +1230,50 @@ export default function KardexClient({ initialMovimientos, productos, categorias
               )}
 
               {/* Fila TOTAL */}
-              {(kardexData.rows.length > 0 || kardexData.saldoInicialFisico !== 0) && (
-                <tr style={{ background: '#f9fafb', fontWeight: 'bold' }}>
-                  {conImportes ? (
-                    <>
-                      <td colSpan={10} style={{ textAlign: 'right' }}>TOTAL</td>
-                      <td colSpan={2} style={{ textAlign: 'center' }}>-</td>
-                      <td style={{ textAlign: 'right' }}>
-                        {(kardexData.rows.length > 0 ? kardexData.rows[kardexData.rows.length - 1].saldoBs : kardexData.saldoInicialValorado)?.toFixed(6).replace(/\.?0+$/, "")}
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td colSpan={7} style={{ textAlign: 'right' }}>TOTAL</td>
-                      <td colSpan={1} style={{ textAlign: 'center' }}>-</td>
-                      <td style={{ textAlign: 'center' }}>
-                        {kardexData.rows.length > 0 ? kardexData.rows[kardexData.rows.length - 1].saldoFisico : kardexData.saldoInicialFisico}
-                      </td>
-                    </>
-                  )}
-                </tr>
-              )}
+              {(kardexData.rows.length > 0 || kardexData.saldoInicialFisico !== 0) && (() => {
+                let totEntradas = 0, totSalidas = 0, totEntradasBs = 0, totSalidasBs = 0;
+                kardexData.rows.forEach(r => {
+                  if (r.entradas > 0) totEntradas += r.entradas;
+                  if (r.salidas > 0) totSalidas += r.salidas;
+                  if (r.ingresoBs > 0) totEntradasBs += r.ingresoBs;
+                  if (r.egresoBs > 0) totSalidasBs += r.egresoBs;
+                });
+                const lastFisico = kardexData.rows.length > 0 
+                  ? kardexData.rows[kardexData.rows.length - 1].saldoFisico 
+                  : kardexData.saldoInicialFisico;
+                const lastValorado = kardexData.rows.length > 0 
+                  ? kardexData.rows[kardexData.rows.length - 1].saldoBs 
+                  : kardexData.saldoInicialValorado;
+
+                return (
+                  <tr style={{ background: '#f9fafb', fontWeight: 'bold' }}>
+                    <td colSpan={6} style={{ textAlign: 'right' }}>TOTAL</td>
+                    <td style={{ textAlign: 'center', color: 'var(--color-success)' }}>
+                      {totEntradas > 0 ? totEntradas : '-'}
+                    </td>
+                    <td style={{ textAlign: 'center', color: 'var(--color-danger)' }}>
+                      {totSalidas > 0 ? totSalidas : '-'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {lastFisico}
+                    </td>
+                    {conImportes && (
+                      <>
+                        <td style={{ textAlign: 'center' }}>-</td>
+                        <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>
+                          {totEntradasBs > 0 ? totEntradasBs.toFixed(2) : '-'}
+                        </td>
+                        <td style={{ textAlign: 'right', color: 'var(--color-danger)' }}>
+                          {totSalidasBs > 0 ? totSalidasBs.toFixed(2) : '-'}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          Bs. {Number(lastValorado).toFixed(2)}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })()}
               </tbody>
             </table>
           )}

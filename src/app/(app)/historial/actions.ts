@@ -569,7 +569,7 @@ export async function importarTransacciones(
         }
       }
 
-      const stockFinal = Math.max(0, Math.round(stockCalculado));
+      const stockFinal = Math.round(stockCalculado);
 
       await tenantPrisma.producto.update({
         where: { codigo: cod },
@@ -602,4 +602,246 @@ export async function importarTransacciones(
     providersCreated: proveedoresCreadosCount
   };
 }
+
+export interface TransaccionEditPayload {
+  tipoTransaccion: string;
+  nroDocumento: string;
+  fecha: string;
+  nitCi: string;
+  razonSocial: string;
+  formaPago: string;
+  descuento: number;
+  observaciones?: string;
+  detalles: Array<{
+    productoCodigo: string;
+    cantidad: number;
+    precioUnitario: number;
+    subtotal: number;
+  }>;
+}
+
+export async function eliminarTransaccion(transaccionId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.currentConnectionString) {
+    throw new Error("No hay sesión activa");
+  }
+
+  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
+
+  // Buscar transacción existente con sus relaciones
+  const txObj = await tenantPrisma.transaccion.findUnique({
+    where: { id: transaccionId },
+    include: {
+      detalles: true,
+      pagos: true,
+      deudaCredito: true,
+    }
+  });
+
+  if (!txObj) {
+    throw new Error("La transacción no existe o ya fue eliminada.");
+  }
+
+  await tenantPrisma.$transaction(async (tx) => {
+    // 1. Revertir stock de cada detalle
+    for (const d of txObj.detalles) {
+      if (txObj.tipoTransaccion === "VENTA") {
+        // La venta restó stock; revertirla significa sumar
+        await tx.producto.update({
+          where: { codigo: d.productoCodigo },
+          data: { stock: { increment: d.cantidad } }
+        });
+      } else {
+        // COMPRA, INVENTARIO INICIAL o SALDO INICIAL sumaron stock; revertirla significa restar
+        await tx.producto.update({
+          where: { codigo: d.productoCodigo },
+          data: { stock: { decrement: d.cantidad } }
+        });
+      }
+    }
+
+    // 2. Eliminar relaciones dependientes
+    await tx.pago.deleteMany({
+      where: { transaccionId }
+    });
+
+    await tx.deudaCredito.deleteMany({
+      where: { transaccionId }
+    });
+
+    await tx.detalleTransaccion.deleteMany({
+      where: { transaccionId }
+    });
+
+    // 3. Eliminar la transacción
+    await tx.transaccion.delete({
+      where: { id: transaccionId }
+    });
+  });
+
+  revalidatePath("/historial");
+  revalidatePath("/transacciones");
+  revalidatePath("/productos");
+  revalidatePath("/kardex");
+  revalidatePath("/dashboard");
+
+  return { success: true };
+}
+
+export async function editarTransaccion(transaccionId: string, data: TransaccionEditPayload) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.currentConnectionString) {
+    throw new Error("No hay sesión activa");
+  }
+
+  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
+
+  const currentTx = await tenantPrisma.transaccion.findUnique({
+    where: { id: transaccionId },
+    include: {
+      detalles: true,
+      pagos: true,
+      deudaCredito: true,
+    }
+  });
+
+  if (!currentTx) {
+    throw new Error("La transacción no existe o ya fue eliminada.");
+  }
+
+  if (!data.detalles || data.detalles.length === 0) {
+    throw new Error("La transacción debe contener al menos un producto.");
+  }
+
+  // Verificar que todos los productos existan
+  for (const d of data.detalles) {
+    const prod = await tenantPrisma.producto.findUnique({ where: { codigo: d.productoCodigo } });
+    if (!prod) {
+      throw new Error(`El producto con código ${d.productoCodigo} no existe en el catálogo.`);
+    }
+  }
+
+  const parsedFecha = data.fecha ? new Date(data.fecha.includes("T") ? data.fecha : data.fecha + "T12:00:00") : new Date();
+  const totalDetalles = data.detalles.reduce((acc, curr) => acc + (curr.subtotal || (curr.cantidad * curr.precioUnitario)), 0);
+  const totalPagado = Math.max(0, totalDetalles - (data.descuento || 0));
+
+  await tenantPrisma.$transaction(async (tx) => {
+    // 1. Revertir el stock de los detalles ANTERIORES
+    for (const oldD of currentTx.detalles) {
+      if (currentTx.tipoTransaccion === "VENTA") {
+        await tx.producto.update({
+          where: { codigo: oldD.productoCodigo },
+          data: { stock: { increment: oldD.cantidad } }
+        });
+      } else {
+        await tx.producto.update({
+          where: { codigo: oldD.productoCodigo },
+          data: { stock: { decrement: oldD.cantidad } }
+        });
+      }
+    }
+
+    // 2. Aplicar el stock de los NUEVOS detalles
+    for (const newD of data.detalles) {
+      const cant = Math.round(Number(newD.cantidad)) || 0;
+      if (data.tipoTransaccion === "VENTA") {
+        await tx.producto.update({
+          where: { codigo: newD.productoCodigo },
+          data: { stock: { decrement: cant } }
+        });
+      } else {
+        await tx.producto.update({
+          where: { codigo: newD.productoCodigo },
+          data: { stock: { increment: cant } }
+        });
+      }
+    }
+
+    // 3. Reemplazar los detalles de la transacción
+    await tx.detalleTransaccion.deleteMany({
+      where: { transaccionId }
+    });
+
+    await tx.detalleTransaccion.createMany({
+      data: data.detalles.map((d) => ({
+        transaccionId,
+        productoCodigo: d.productoCodigo,
+        cantidad: Math.round(Number(d.cantidad)) || 1,
+        precioUnitario: Number(d.precioUnitario) || 0,
+        subtotal: Number(d.subtotal) || ((Math.round(Number(d.cantidad)) || 1) * (Number(d.precioUnitario) || 0))
+      }))
+    });
+
+    // 4. Actualizar cabecera de la transacción
+    await tx.transaccion.update({
+      where: { id: transaccionId },
+      data: {
+        tipoTransaccion: data.tipoTransaccion,
+        nroDocumento: data.nroDocumento.trim(),
+        fecha: parsedFecha,
+        nitCi: data.nitCi.trim(),
+        razonSocial: data.razonSocial.trim(),
+        formaPago: data.formaPago,
+        descuento: Number(data.descuento) || 0,
+        observaciones: data.observaciones ? data.observaciones.trim() : null
+      }
+    });
+
+    // 5. Ajustar Pagos / Crédito
+    if (data.formaPago !== "CREDITO") {
+      // Eliminar registro de deuda si antes era crédito
+      await tx.deudaCredito.deleteMany({ where: { transaccionId } });
+
+      if (currentTx.pagos.length <= 1) {
+        if (currentTx.pagos.length === 1) {
+          await tx.pago.update({
+            where: { id: currentTx.pagos[0].id },
+            data: {
+              monto: totalPagado,
+              fecha: parsedFecha,
+              observaciones: "Pago completado al contado"
+            }
+          });
+        } else {
+          await tx.pago.create({
+            data: {
+              transaccionId,
+              monto: totalPagado,
+              fecha: parsedFecha,
+              observaciones: "Pago completado al contado"
+            }
+          });
+        }
+      }
+    } else {
+      // Es a CRÉDITO
+      const abonosActuales = currentTx.pagos.reduce((sum, p) => sum + p.monto, 0);
+      const saldoPendiente = Math.max(0, totalPagado - abonosActuales);
+
+      await tx.deudaCredito.upsert({
+        where: { transaccionId },
+        create: {
+          transaccionId,
+          montoTotal: totalPagado,
+          saldoPendiente,
+          estado: saldoPendiente <= 0 ? "PAGADO" : "PENDIENTE"
+        },
+        update: {
+          montoTotal: totalPagado,
+          saldoPendiente,
+          estado: saldoPendiente <= 0 ? "PAGADO" : "PENDIENTE"
+        }
+      });
+    }
+  });
+
+  revalidatePath("/historial");
+  revalidatePath("/transacciones");
+  revalidatePath("/productos");
+  revalidatePath("/kardex");
+  revalidatePath("/dashboard");
+
+  return { success: true };
+}
+
 

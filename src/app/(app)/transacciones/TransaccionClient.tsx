@@ -155,8 +155,13 @@ function SearchableProductSelect({ value, onChange, productos, onAddNewProduct }
                   <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.3rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {p.descripcion || 'Sin descripción'}
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold', marginTop: '0.3rem' }}>
-                    Stock Disponible: {p.stock} {p.unidadMedida || 'Unidad(es)'}
+                  <div style={{ 
+                    fontSize: '0.8rem', 
+                    color: p.stock <= 0 ? '#ef4444' : '#059669', 
+                    fontWeight: 'bold', 
+                    marginTop: '0.3rem' 
+                  }}>
+                    Stock Disponible: {p.stock} {p.unidadMedida || 'Unidad(es)'} {p.stock <= 0 && <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#dc2626' }}>(Permite venta por demás)</span>}
                   </div>
                 </div>
               ))
@@ -523,16 +528,6 @@ export default function TransaccionClient({
 
     if (formaPago === "CREDITO" && (Number(abonoInicial) || 0) < 1) {
       return Swal.fire('Error', "Para pagos a CRÉDITO, debe de haner un abono inicial minimo", 'warning');
-    }
-
-    // Stock validation check in UI
-    if (modo === "VENTA") {
-      for (const d of detalles) {
-        const p = productos.find(prod => prod.codigo === d.productoCodigo);
-        if (p && p.stock < Number(d.cantidad)) {
-          return Swal.fire('Error', `El producto ${p.nombre} no tiene suficiente stock (${p.stock} disponibles).`, 'warning');
-        }
-      }
     }
 
     setLoading(true);
