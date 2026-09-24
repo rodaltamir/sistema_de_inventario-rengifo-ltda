@@ -366,61 +366,165 @@ export default function HistorialClient({
         const row = dataFmt[i];
         if (!row || row.length === 0) continue;
 
-        // 1. Detectar cabeceras de producto (ej. CODIGO:, CÓDIGO:, etc.)
+        // 1. Detectar cabeceras de producto (ej. CODIGO:, CÓDIGO:, COD:, etc., en misma celda o celdas continuas)
         for (let c = 0; c < row.length; c++) {
-          const cellVal = String(row[c] || "").trim().toUpperCase();
-          if (cellVal === "CODIGO:" || cellVal === "CÓDIGO:") {
-            let code = "";
-            for (let nextC = c + 1; nextC < row.length; nextC++) {
-              if (row[nextC] && String(row[nextC]).trim() !== "") {
-                code = String(row[nextC]).trim();
-                break;
-              }
-            }
+          const rawCellVal = String(row[c] || "").trim();
+          const uCellVal = rawCellVal.toUpperCase();
 
-            let prodName = "";
-            let marca = "";
-            let desc = "";
-            let unidad = "Unidad";
-
-            for (let rOffset = -4; rOffset <= 3; rOffset++) {
-              const targetRow = dataFmt[i + rOffset];
-              if (!targetRow) continue;
-              for (let tc = 0; tc < targetRow.length; tc++) {
-                const tVal = String(targetRow[tc] || "").trim().toUpperCase();
-                if (tVal.includes("PRODUCTO:")) {
-                  prodName = String(targetRow[tc + 1] || targetRow[tc + 2] || "").trim();
-                }
-                if (tVal.includes("MARCA:")) {
-                  marca = String(targetRow[tc + 1] || (dataFmt[i + rOffset + 1] && dataFmt[i + rOffset + 1][tc]) || "").trim();
-                }
-                if (tVal.includes("DESCRIPCIÓN:") || tVal.includes("DESCRIPCION:")) {
-                  desc = String(targetRow[tc + 1] || targetRow[tc + 2] || "").trim();
-                }
-                if (tVal.includes("UND. MEDIDA") || tVal.includes("UNIDAD")) {
-                  unidad = String(targetRow[tc + 1] || (dataFmt[i + rOffset + 1] && dataFmt[i + rOffset + 1][tc]) || "").trim() || "Unidad";
+          const codeMatch = uCellVal.match(/^(?:C[OÓ]DIGO|C[OÓ]D)(?:\s*(?:DE|DEL)?\s*PRODUCTO)?\s*[:.-]?\s*(.*)$/i);
+          if (codeMatch) {
+            let code = codeMatch[1] ? codeMatch[1].trim() : "";
+            if (!code) {
+              for (let nextC = c + 1; nextC < row.length; nextC++) {
+                const nVal = String(row[nextC] || "").trim();
+                if (nVal !== "") {
+                  const nUpper = nVal.toUpperCase();
+                  if (
+                    !nUpper.startsWith("DESCRIP") &&
+                    !nUpper.startsWith("UND") &&
+                    !nUpper.startsWith("UNIDAD") &&
+                    !nUpper.startsWith("PRODUCTO") &&
+                    !nUpper.startsWith("MARCA") &&
+                    !nUpper.startsWith("METODO") &&
+                    !nUpper.startsWith("MÉTODO") &&
+                    !nUpper.startsWith("PERIODO")
+                  ) {
+                    code = nVal;
+                    break;
+                  }
                 }
               }
             }
 
             if (code) {
-              const codeTrim = code.trim();
-              const prodNameTrim = prodName.trim();
+              const codeTrim = String(code).trim();
+              let prodName = "";
+              let marca = "";
+              let desc = "";
+              let unidad = "Unidad";
 
-              // Buscar si ya existe en la base de datos por código o por nombre
+              // Extraer metadatos del producto en el bloque de cabecera (-5 a +4 filas)
+              for (let rOffset = -5; rOffset <= 4; rOffset++) {
+                const targetRow = dataFmt[i + rOffset];
+                if (!targetRow) continue;
+
+                for (let tc = 0; tc < targetRow.length; tc++) {
+                  const tRaw = String(targetRow[tc] || "").trim();
+                  const tUpper = tRaw.toUpperCase();
+
+                  // PRODUCTO / ARTÍCULO / NOMBRE
+                  if (
+                    tUpper.includes("PRODUCTO:") ||
+                    tUpper === "PRODUCTO" ||
+                    tUpper.includes("ARTICULO:") ||
+                    tUpper.includes("ARTÍCULO:") ||
+                    tUpper === "ARTICULO"
+                  ) {
+                    const inlineVal = tRaw.replace(/^(?:PRODUCTO|ART[IÍ]CULO|NOMBRE)\s*[:.-]?\s*/i, "").trim();
+                    if (inlineVal) {
+                      prodName = inlineVal;
+                    } else {
+                      for (let k = tc + 1; k < targetRow.length; k++) {
+                        const cand = String(targetRow[k] || "").trim();
+                        if (cand) {
+                          prodName = cand;
+                          break;
+                        }
+                      }
+                    }
+                  }
+
+                  // MARCA
+                  if (tUpper.includes("MARCA:") || tUpper === "MARCA") {
+                    const inlineMarca = tRaw.replace(/^MARCA\s*[:.-]?\s*/i, "").trim();
+                    if (inlineMarca) {
+                      marca = inlineMarca;
+                    } else {
+                      for (let k = tc + 1; k < targetRow.length; k++) {
+                        const cand = String(targetRow[k] || "").trim();
+                        if (cand) {
+                          marca = cand;
+                          break;
+                        }
+                      }
+                      if (!marca && dataFmt[i + rOffset + 1]) {
+                        const nextR = dataFmt[i + rOffset + 1];
+                        for (let nk = 0; nk < nextR.length; nk++) {
+                          const cand = String(nextR[nk] || "").trim();
+                          if (cand && !cand.toUpperCase().includes("PERIODO") && isNaN(Number(cand))) {
+                            marca = cand;
+                            break;
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  // DESCRIPCIÓN
+                  if (
+                    tUpper.includes("DESCRIPCIÓN:") ||
+                    tUpper.includes("DESCRIPCION:") ||
+                    tUpper === "DESCRIPCION" ||
+                    tUpper === "DESCRIPCIÓN"
+                  ) {
+                    const inlineDesc = tRaw.replace(/^DESCRIPCI[OÓ]N\s*[:.-]?\s*/i, "").trim();
+                    if (inlineDesc) {
+                      desc = inlineDesc;
+                    } else {
+                      for (let k = tc + 1; k < targetRow.length; k++) {
+                        const cand = String(targetRow[k] || "").trim();
+                        if (cand) {
+                          desc = cand;
+                          break;
+                        }
+                      }
+                    }
+                  }
+
+                  // UNIDAD DE MEDIDA
+                  if (
+                    tUpper.includes("UND. MEDIDA") ||
+                    tUpper.includes("UNIDAD DE MEDIDA") ||
+                    tUpper.includes("U.M.") ||
+                    tUpper === "UNIDAD"
+                  ) {
+                    for (let k = tc + 1; k < targetRow.length; k++) {
+                      const cand = String(targetRow[k] || "").trim();
+                      if (cand) {
+                        unidad = cand;
+                        break;
+                      }
+                    }
+                    if (unidad === "Unidad" && dataFmt[i + rOffset + 1]) {
+                      const nextR = dataFmt[i + rOffset + 1];
+                      for (let nk = 0; nk < nextR.length; nk++) {
+                        const cand = String(nextR[nk] || "").trim();
+                        if (
+                          cand &&
+                          ["CAJA", "UND", "UNIDAD", "PAQUETE", "BOLSA", "KILOS", "PIEZA", "LITRO", "FRASCO"].some((u) =>
+                            cand.toUpperCase().includes(u)
+                          )
+                        ) {
+                          unidad = cand;
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              // VALIDACIÓN ESTRICTA: Detección de producto existente ÚNICAMENTE por código
               const prodExistente = (productos || []).find((p: any) => {
-                const dbCode = (p.codigo || "").trim().toLowerCase();
-                const dbNom = (p.nombre || "").trim().toLowerCase();
-                if (dbCode === codeTrim.toLowerCase()) return true;
-                if (prodNameTrim && dbNom === prodNameTrim.toLowerCase()) return true;
-                return false;
+                const dbCode = String(p.codigo || "").trim().toLowerCase();
+                return dbCode === codeTrim.toLowerCase();
               });
 
               const finalCode = prodExistente ? prodExistente.codigo : codeTrim;
-              const finalNombre = prodExistente?.nombre || prodNameTrim || `Producto ${finalCode}`;
-              const finalMarca = prodExistente?.marca || marca || "";
-              const finalDesc = prodExistente?.descripcion || desc || "";
-              const finalUnd = prodExistente?.unidadMedida || unidad || "Unidad";
+              const finalNombre = prodName || prodExistente?.nombre || `Producto ${finalCode}`;
+              const finalMarca = marca || prodExistente?.marca || "";
+              const finalDesc = desc || prodExistente?.descripcion || "";
+              const finalUnd = unidad || prodExistente?.unidadMedida || "Unidad";
 
               const newProdInfo: DetectedProductInfo = {
                 codigo: finalCode,
@@ -439,27 +543,59 @@ export default function HistorialClient({
           }
         }
 
-        // 2. Comprobar si la fila es un movimiento válido
-        const movCell = String(row[2] || "").trim().toUpperCase();
-        if (
-          !movCell ||
-          movCell === "MOVIMIENTO" ||
-          movCell.includes("SALDO") ||
-          movCell.includes("SUBTOTAL") ||
-          movCell.includes("TOTAL")
-        ) {
-          continue;
+        // 2. Comprobar si la fila es un movimiento válido (detectar columna de movimiento dinámicamente)
+        let movColIdx = -1;
+        let movCell = "";
+
+        for (const c of [2, 1, 3, 0, 4]) {
+          if (c < row.length) {
+            const val = String(row[c] || "").trim().toUpperCase();
+            if (
+              val &&
+              val !== "MOVIMIENTO" &&
+              !val.includes("SUBTOTAL") &&
+              !val.includes("TOTALES") &&
+              (val.includes("INICIAL") ||
+               val.includes("INICUAL") ||
+               /\bVENTAS?\b/i.test(val) ||
+               /\bCOMPRAS?\b/i.test(val) ||
+               val.includes("AJUSTE"))
+            ) {
+              movColIdx = c;
+              movCell = val;
+              break;
+            }
+          }
         }
+
+        if (movColIdx === -1 || !movCell) continue;
 
         const isInicial = movCell.includes("INICIAL") || movCell.includes("INICUAL");
         const isVenta = /\bVENTAS?\b/i.test(movCell);
         const isCompra = /\bCOMPRAS?\b/i.test(movCell);
         const isAjuste = movCell.includes("AJUSTE");
 
-        if (!isInicial && !isVenta && !isCompra && !isAjuste) continue;
-
         const rawRow = dataRaw[i] || [];
-        const fechaIso = parseDateString(rawRow[1], row[1]);
+
+        // Detectar fecha de forma robusta
+        let fechaIso = "";
+        if (movColIdx > 0) {
+          fechaIso = parseDateString(rawRow[movColIdx - 1], row[movColIdx - 1]);
+        }
+        if (!fechaIso) {
+          fechaIso = parseDateString(rawRow[1], row[1]) || parseDateString(rawRow[0], row[0]);
+        }
+        if (!fechaIso) {
+          for (let fc = 0; fc < row.length; fc++) {
+            if (fc !== movColIdx) {
+              const testD = parseDateString(rawRow[fc], row[fc]);
+              if (testD) {
+                fechaIso = testD;
+                break;
+              }
+            }
+          }
+        }
         if (!fechaIso) continue;
 
         // Validar rango razonable de año
@@ -467,12 +603,21 @@ export default function HistorialClient({
         const anio = parseInt(yStr, 10);
         if (isNaN(anio) || anio < 1990 || anio > 2100) continue;
 
-        const entradaCant = parseNumber(rawRow[6], row[6]);
-        const salidaCant = parseNumber(rawRow[7], row[7]);
-        const saldoStock = parseNumber(rawRow[8], row[8]);
-        const pu = parseNumber(rawRow[9], row[9]);
-        const entradaBs = parseNumber(rawRow[10], row[10]);
-        const salidaBs = parseNumber(rawRow[11], row[11]);
+        // Columnas de cantidades e importes (con offset relativo si la columna de movimiento está corrida)
+        const colOffset = movColIdx - 2;
+        const colEntrada = Math.max(0, 6 + colOffset);
+        const colSalida = Math.max(0, 7 + colOffset);
+        const colSaldo = Math.max(0, 8 + colOffset);
+        const colPU = Math.max(0, 9 + colOffset);
+        const colEntradaBs = Math.max(0, 10 + colOffset);
+        const colSalidaBs = Math.max(0, 11 + colOffset);
+
+        const entradaCant = parseNumber(rawRow[colEntrada], row[colEntrada]);
+        const salidaCant = parseNumber(rawRow[colSalida], row[colSalida]);
+        const saldoStock = parseNumber(rawRow[colSaldo], row[colSaldo]);
+        const pu = parseNumber(rawRow[colPU], row[colPU]);
+        const entradaBs = parseNumber(rawRow[colEntradaBs], row[colEntradaBs]);
+        const salidaBs = parseNumber(rawRow[colSalidaBs], row[colSalidaBs]);
 
         let tipo: "VENTA" | "COMPRA" | "INVENTARIO INICIAL" = "VENTA";
         let cant = 1;
@@ -518,6 +663,10 @@ export default function HistorialClient({
           detectedProdsMap.get(prodCod)!.movCount += 1;
         }
 
+        const nitVal = String(row[movColIdx + 1] || row[3] || "").trim() || "0";
+        const razonVal = String(row[movColIdx + 2] || row[4] || "").trim() || (tipo === "VENTA" ? "CLIENTE GENERAL" : "PROVEEDOR GENERAL");
+        const docVal = String(row[movColIdx + 3] || row[5] || "").trim() || `DOC-${fechaIso.replace(/-/g, "")}-${i + 1}`;
+
         parsedItems.push({
           _id: `mov-${i}-${parsedItems.length}`,
           _rawCodigo: prodCod,
@@ -528,9 +677,9 @@ export default function HistorialClient({
           unidadMedida: currentProd ? currentProd.unidadMedida : "Unidad",
           fecha: fechaIso,
           tipoTransaccion: tipo,
-          nitCi: String(row[3] || "").trim() || "0",
-          razonSocial: String(row[4] || "").trim() || (tipo === "VENTA" ? "CLIENTE GENERAL" : "PROVEEDOR GENERAL"),
-          nroDocumento: String(row[5] || "").trim() || `DOC-${fechaIso.replace(/-/g, "")}-${i + 1}`,
+          nitCi: nitVal,
+          razonSocial: razonVal,
+          nroDocumento: docVal,
           cantidad: cant,
           precioUnitario: finalPu,
           subtotal: subtotal,
@@ -1361,9 +1510,8 @@ export default function HistorialClient({
                   {showProductMappingDrawer && (
                     <div className={styles.detectedGrid}>
                       {detectedProducts.map((p) => {
-                        const existsInDb = p.esExistente || productos.some((dbP) => 
-                          dbP.codigo.trim().toLowerCase() === p.codigo.trim().toLowerCase() || 
-                          dbP.nombre.trim().toLowerCase() === p.nombre.trim().toLowerCase()
+                        const existsInDb = Boolean(p.esExistente) || productos.some((dbP) => 
+                          dbP.codigo.trim().toLowerCase() === p.codigo.trim().toLowerCase()
                         );
                         return (
                           <div key={p.codigo} className={styles.detectedCard}>

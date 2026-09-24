@@ -129,7 +129,7 @@ export async function importarTransacciones(
     throw new Error("Ninguno de los movimientos seleccionados contiene información válida para importar.");
   }
 
-  // Cargar TODOS los productos de la empresa para reutilización y mapeo por código o nombre
+  // Cargar TODOS los productos de la empresa para reutilización y mapeo ÚNICAMENTE por código
   const todosLosProductos = await tenantPrisma.producto.findMany({
     select: {
       codigo: true,
@@ -144,21 +144,18 @@ export async function importarTransacciones(
   });
 
   const mapaPorCodigo = new Map<string, typeof todosLosProductos[0]>();
-  const mapaPorNombre = new Map<string, typeof todosLosProductos[0]>();
 
   for (const p of todosLosProductos) {
     if (p.codigo) mapaPorCodigo.set(p.codigo.trim().toLowerCase(), p);
-    if (p.nombre) mapaPorNombre.set(p.nombre.trim().toLowerCase(), p);
   }
 
-  // Reutilizar productos existentes por coincidencia de código o de nombre
+  // Reutilizar productos existentes por coincidencia de código ÚNICAMENTE
   const productosReutilizadosSet = new Set<string>();
 
   for (const m of movimientosValidos) {
     const codKey = m.productoCodigo.trim().toLowerCase();
-    const nomKey = m.productoNombre.trim().toLowerCase();
 
-    const prodExistente = (codKey ? mapaPorCodigo.get(codKey) : undefined) || (nomKey ? mapaPorNombre.get(nomKey) : undefined);
+    const prodExistente = codKey ? mapaPorCodigo.get(codKey) : undefined;
 
     if (prodExistente) {
       m.productoCodigo = prodExistente.codigo;
@@ -281,32 +278,18 @@ export async function importarTransacciones(
     }
   }
 
-  // 2. Identificar productos auténticamente nuevos y crearlos si faltan
+  // 2. Identificar productos auténticamente nuevos y crearlos si faltan (VALIDACIÓN ESTRICTA POR CÓDIGO)
   let productosCreadosCount = 0;
   const codigosEnMovimientos = Array.from(new Set(movimientosValidos.map((m) => m.productoCodigo.trim()))).filter(Boolean);
 
   if (opciones.crearProductosFaltantes !== false) {
     for (const cod of codigosEnMovimientos) {
       const codLower = cod.toLowerCase();
-      // Si ya existe por código en los mapas, no recrear
+      // Si ya existe por código en los mapas o BD, no recrear
       if (!mapaPorCodigo.has(codLower)) {
-        const movsDelProd = movimientosValidos.filter((m) => m.productoCodigo.trim() === cod);
+        const movsDelProd = movimientosValidos.filter((m) => m.productoCodigo.trim().toLowerCase() === codLower);
         const muestra = movsDelProd[0];
         const nom = (muestra?.productoNombre || `Producto ${cod}`).trim();
-        const nomLower = nom.toLowerCase();
-
-        // Verificar una vez más si existe por nombre
-        if (mapaPorNombre.has(nomLower)) {
-          const prodExistente = mapaPorNombre.get(nomLower)!;
-          // Asignar el código existente a todos los movimientos con este código
-          for (const m of movimientosValidos) {
-            if (m.productoCodigo.trim() === cod) {
-              m.productoCodigo = prodExistente.codigo;
-            }
-          }
-          productosReutilizadosSet.add(prodExistente.codigo);
-          continue;
-        }
 
         const compraOInicial = movsDelProd.find((m) => m.tipoTransaccion !== "VENTA" && m.precioUnitario > 0);
         const ventaMov = movsDelProd.find((m) => m.tipoTransaccion === "VENTA" && m.precioUnitario > 0);
@@ -332,7 +315,6 @@ export async function importarTransacciones(
         });
 
         mapaPorCodigo.set(nuevoProd.codigo.trim().toLowerCase(), nuevoProd);
-        mapaPorNombre.set(nuevoProd.nombre.trim().toLowerCase(), nuevoProd);
         productosCreadosCount++;
       }
     }
