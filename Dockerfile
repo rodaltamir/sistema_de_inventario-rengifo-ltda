@@ -49,7 +49,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=nextjs:nodejs /app/update-all-tenants.js ./update-all-tenants.js
 
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
@@ -61,12 +61,14 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER root
 # Ensure npx can run prisma
 RUN npm install -g prisma@5.22.0
+RUN mkdir -p /app/public/uploads && chown -R nextjs:nodejs /app/public
 
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 8080
 
-ENV PORT 3000
+ENV PORT 8080
 ENV HOSTNAME "0.0.0.0"
+ENV NODE_OPTIONS="--max-http-header-size=65536"
 
 CMD ["node", "server.js"]

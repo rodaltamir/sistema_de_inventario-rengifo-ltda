@@ -32,3 +32,27 @@ export async function getTenantClient(connectionString: string): Promise<TenantC
   }
   return globalForTenants.tenantClients[connectionString];
 }
+
+export async function getSessionTenantClient(session: any): Promise<{ tenantPrisma: TenantClient; tenantId: string }> {
+  let connectionString = session?.user?.currentConnectionString;
+  let tenantId = session?.user?.currentTenantId;
+
+  if (!connectionString && session?.user?.id) {
+    const userWithTenants = await masterPrisma.user.findUnique({
+      where: { id: session.user.id },
+      include: { tenantUsers: { include: { tenant: true } } }
+    });
+    const fallbackTenant = userWithTenants?.tenantUsers?.[0]?.tenant || await masterPrisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
+    if (fallbackTenant) {
+      connectionString = fallbackTenant.connectionString;
+      tenantId = fallbackTenant.id;
+    }
+  }
+
+  if (!connectionString) {
+    throw new Error("No hay empresa activa seleccionada en la sesión.");
+  }
+
+  const tenantPrisma = await getTenantClient(connectionString);
+  return { tenantPrisma, tenantId: tenantId || "default" };
+}

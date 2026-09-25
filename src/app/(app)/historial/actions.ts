@@ -1,6 +1,6 @@
 "use server";
 
-import { getTenantClient } from "@/lib/prisma";
+import { getTenantClient, getSessionTenantClient } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
@@ -32,26 +32,9 @@ export async function importarTransacciones(
   movimientos: MovimientoImportado[],
   opciones: OpcionesImportacion = { crearProductosFaltantes: true, actualizarStock: true, crearContactosFaltantes: true }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.currentConnectionString) {
-    throw new Error("No hay sesión activa o conexión de base de datos disponible");
-  }
-
-  if (!movimientos || movimientos.length === 0) {
-    return {
-      success: true,
-      count: 0,
-      transactionsCreated: 0,
-      itemsAddedToExistingTransactions: 0,
-      transactionsSkippedDuplicate: 0,
-      productsCreated: 0,
-      productsReused: 0,
-      clientsCreated: 0,
-      providersCreated: 0
-    };
-  }
-
-  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
+  try {
+    const session = await getServerSession(authOptions);
+    const { tenantPrisma } = await getSessionTenantClient(session);
 
   // Validar y filtrar movimientos válidos
   const movimientosValidos: MovimientoImportado[] = [];
@@ -572,17 +555,21 @@ export async function importarTransacciones(
   revalidatePath("/transacciones");
   revalidatePath("/proveedores");
 
-  return {
-    success: true,
-    count: movimientosValidos.length,
-    transactionsCreated: transaccionesCreadasCount,
-    itemsAddedToExistingTransactions: itemsAgregadosExistentesCount,
-    transactionsSkippedDuplicate: transaccionesOmitidasDuplicadasCount,
-    productsCreated: productosCreadosCount,
-    productsReused: productosReutilizadosSet.size,
-    clientsCreated: clientesCreadosCount,
-    providersCreated: proveedoresCreadosCount
-  };
+    return {
+      success: true,
+      count: movimientosValidos.length,
+      transactionsCreated: transaccionesCreadasCount,
+      itemsAddedToExistingTransactions: itemsAgregadosExistentesCount,
+      transactionsSkippedDuplicate: transaccionesOmitidasDuplicadasCount,
+      productsCreated: productosCreadosCount,
+      productsReused: productosReutilizadosSet.size,
+      clientsCreated: clientesCreadosCount,
+      providersCreated: proveedoresCreadosCount
+    };
+  } catch (err: any) {
+    console.error("[importarTransacciones Error]:", err);
+    throw new Error(err.message || "Error al importar transacciones");
+  }
 }
 
 export interface TransaccionEditPayload {
@@ -603,12 +590,9 @@ export interface TransaccionEditPayload {
 }
 
 export async function eliminarTransaccion(transaccionId: string) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.currentConnectionString) {
-    throw new Error("No hay sesión activa");
-  }
-
-  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
+  try {
+    const session = await getServerSession(authOptions);
+    const { tenantPrisma } = await getSessionTenantClient(session);
 
   // Buscar transacción existente con sus relaciones
   const txObj = await tenantPrisma.transaccion.findUnique({
@@ -667,18 +651,19 @@ export async function eliminarTransaccion(transaccionId: string) {
   revalidatePath("/kardex");
   revalidatePath("/dashboard");
 
-  return { success: true };
+    return { success: true };
+  } catch (err: any) {
+    console.error("[eliminarTransaccion Error]:", err);
+    throw new Error(err.message || "Error al eliminar transacción");
+  }
 }
 
 export async function editarTransaccion(transaccionId: string, data: TransaccionEditPayload) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.currentConnectionString) {
-    throw new Error("No hay sesión activa");
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { tenantPrisma } = await getSessionTenantClient(session);
 
-  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
-
-  const currentTx = await tenantPrisma.transaccion.findUnique({
+    const currentTx = await tenantPrisma.transaccion.findUnique({
     where: { id: transaccionId },
     include: {
       detalles: true,
@@ -823,7 +808,11 @@ export async function editarTransaccion(transaccionId: string, data: Transaccion
   revalidatePath("/kardex");
   revalidatePath("/dashboard");
 
-  return { success: true };
+    return { success: true };
+  } catch (err: any) {
+    console.error("[editarTransaccion Error]:", err);
+    throw new Error(err.message || "Error al editar transacción");
+  }
 }
 
 

@@ -1,38 +1,39 @@
 "use server";
 
-import { getTenantClient } from "@/lib/prisma";
+import { getSessionTenantClient } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function crearCategoriaConProductos(nombre: string, productosCodigos: string[]) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.currentConnectionString) throw new Error("No hay sesión activa");
+  try {
+    const session = await getServerSession(authOptions);
+    const { tenantPrisma, tenantId } = await getSessionTenantClient(session);
 
-  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
-
-  // Crear la categoría y actualizar los productos en una transacción (o de forma secuencial)
-  // Usaremos secuencial para mayor simplicidad
-  const nuevaCategoria = await tenantPrisma.categoria.create({
-    data: {
-      nombre,
-      tenantId: session.user.currentTenantId || "default",
-    }
-  });
-
-  if (productosCodigos.length > 0) {
-    await tenantPrisma.producto.updateMany({
-      where: {
-        codigo: { in: productosCodigos }
-      },
+    const nuevaCategoria = await tenantPrisma.categoria.create({
       data: {
-        categoriaId: nuevaCategoria.id
+        nombre,
+        tenantId,
       }
     });
-  }
 
-  revalidatePath("/productos");
-  return nuevaCategoria;
+    if (productosCodigos.length > 0) {
+      await tenantPrisma.producto.updateMany({
+        where: {
+          codigo: { in: productosCodigos }
+        },
+        data: {
+          categoriaId: nuevaCategoria.id
+        }
+      });
+    }
+
+    revalidatePath("/productos");
+    return nuevaCategoria;
+  } catch (err: any) {
+    console.error("[crearCategoriaConProductos Error]:", err);
+    throw new Error(err.message || "Error al crear categoría");
+  }
 }
 
 export async function createProducto(data: {
@@ -49,235 +50,239 @@ export async function createProducto(data: {
   precioVenta: number;
   fecha?: string;
 }) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.currentConnectionString) {
-    throw new Error("No hay sesión activa o falta la conexión de la empresa");
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { tenantPrisma } = await getSessionTenantClient(session);
 
-  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
-
-  // Validate if code exists
-  const exists = await tenantPrisma.producto.findUnique({
-    where: { codigo: data.codigo }
-  });
-
-  if (exists) {
-    throw new Error("Ya existe un producto con ese código");
-  }
-
-  const regDate = data.fecha ? new Date(data.fecha + "T12:00:00") : new Date();
-
-  const newProduct = await tenantPrisma.producto.create({
-    data: {
-      codigo: data.codigo,
-      nombre: data.nombre,
-      descripcion: data.descripcion || "",
-      marca: data.marca || "",
-      unidadMedida: data.unidadMedida || "Unidad",
-      stock: data.stock || 0,
-      costo: data.costo || 0,
-      precioVenta: data.precioVenta || 0,
-      metodoInventario: data.metodoInventario || "Promedio Ponderado",
-      proveedorId: data.proveedorId || null,
-      categoriaId: data.categoriaId || null,
-      createdAt: regDate,
-    }
-  });
-
-  if (data.stock > 0) {
-    const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-    await tenantPrisma.transaccion.create({
-      data: {
-        tipoTransaccion: "SALDO INICIAL",
-        nroDocumento: "INI-" + ts,
-        nitCi: "0",
-        razonSocial: "SISTEMA - SALDO INICIAL",
-        observaciones: "Registro inicial de producto",
-        formaPago: "NINGUNO",
-        fecha: regDate,
-        createdAt: regDate,
-        detalles: {
-          create: [{
-            productoCodigo: data.codigo,
-            cantidad: data.stock,
-            precioUnitario: data.costo || 0,
-            subtotal: data.stock * (data.costo || 0)
-          }]
-        }
-      }
-    });
-  }
-
-  revalidatePath("/productos");
-  return newProduct;
-}
-
-export async function updateProducto(codigo: string, data: any) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.currentConnectionString) throw new Error("No hay sesión activa");
-
-  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
-
-  const updatedProduct = await tenantPrisma.producto.update({
-    where: { codigo },
-    data: {
-      nombre: data.nombre,
-      descripcion: data.descripcion || "",
-      marca: data.marca || "",
-      unidadMedida: data.unidadMedida || "Unidad",
-      stock: data.stock || 0,
-      costo: data.costo || 0,
-      precioVenta: data.precioVenta || 0,
-      metodoInventario: data.metodoInventario || "Promedio Ponderado",
-      proveedorId: data.proveedorId || null,
-      categoriaId: data.categoriaId || null,
-    }
-  });
-
-  revalidatePath("/productos");
-  return updatedProduct;
-}
-
-export async function deleteProducto(codigo: string) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.currentConnectionString) throw new Error("No hay sesión activa");
-
-  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
-
-  // Soft delete: Ocultar producto de la vista y liberar su código original
-  // Esto mantiene intacto el historial de Kardex y transacciones previas
-  await tenantPrisma.producto.update({
-    where: { codigo },
-    data: { 
-      activo: false,
-      codigo: `DEL-${Date.now()}-${codigo}` 
-    }
-  });
-
-  revalidatePath("/productos");
-}
-
-export async function importProductos(productos: any[], descripcion?: string, importDateStr?: string) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.currentConnectionString) throw new Error("No hay sesión activa");
-
-  const tenantPrisma = await getTenantClient(session.user.currentConnectionString);
-
-  if (productos.length === 0) {
-    return 0; // Nada nuevo que importar
-  }
-
-  // Utilizar UTC a mediodía para evitar que la conversión de zonas horarias retrase la fecha al año anterior (ej. 31/12/2024 en vez de 01/01/2025)
-  const yearDateStart = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
-  const yearDateEnd = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
-
-  // Upsert products to update existing ones and create new ones
-  for (const p of productos) {
-    const qtyStock = parseInt(p.stock) || 0;
-    const cost = parseFloat(p.costo) || 0;
-    const pVenta = parseFloat(p.precioVenta) || 0;
-    
+    // Validate if code exists
     const exists = await tenantPrisma.producto.findUnique({
-      where: { codigo: p.codigo }
+      where: { codigo: data.codigo }
     });
 
     if (exists) {
-      await tenantPrisma.producto.update({
-        where: { codigo: p.codigo },
+      throw new Error(`Ya existe un producto con el código "${data.codigo}"`);
+    }
+
+    const regDate = data.fecha ? new Date(data.fecha + "T12:00:00") : new Date();
+
+    const newProduct = await tenantPrisma.producto.create({
+      data: {
+        codigo: data.codigo,
+        nombre: data.nombre,
+        descripcion: data.descripcion || "",
+        marca: data.marca || "",
+        unidadMedida: data.unidadMedida || "Unidad",
+        stock: data.stock || 0,
+        costo: data.costo || 0,
+        precioVenta: data.precioVenta || 0,
+        metodoInventario: data.metodoInventario || "Promedio Ponderado",
+        proveedorId: data.proveedorId || null,
+        categoriaId: data.categoriaId || null,
+        createdAt: regDate,
+      }
+    });
+
+    if (data.stock > 0) {
+      const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+      await tenantPrisma.transaccion.create({
         data: {
-          nombre: p.nombre,
-          descripcion: p.descripcion || "",
-          marca: p.marca || "",
-          unidadMedida: p.unidadMedida || "Unidad",
-          stock: qtyStock,
-          costo: cost,
-          precioVenta: pVenta,
-          createdAt: yearDateStart,
-        }
-      });
-    } else {
-      await tenantPrisma.producto.create({
-        data: {
-          codigo: p.codigo,
-          nombre: p.nombre,
-          descripcion: p.descripcion || "",
-          marca: p.marca || "",
-          unidadMedida: p.unidadMedida || "Unidad",
-          stock: qtyStock,
-          costo: cost,
-          precioVenta: pVenta,
-          metodoInventario: p.metodoInventario || "Promedio Ponderado",
-          proveedorId: null,
-          createdAt: yearDateStart,
+          tipoTransaccion: "SALDO INICIAL",
+          nroDocumento: "INI-" + ts,
+          nitCi: "0",
+          razonSocial: "SISTEMA - SALDO INICIAL",
+          observaciones: "Registro inicial de producto",
+          formaPago: "NINGUNO",
+          fecha: regDate,
+          createdAt: regDate,
+          detalles: {
+            create: [{
+              productoCodigo: data.codigo,
+              cantidad: data.stock,
+              precioUnitario: data.costo || 0,
+              subtotal: data.stock * (data.costo || 0)
+            }]
+          }
         }
       });
     }
+
+    revalidatePath("/productos");
+    return newProduct;
+  } catch (err: any) {
+    console.error("[createProducto Error]:", err);
+    throw new Error(err.message || "Error al crear producto");
   }
-
-  const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-  const desc = descripcion || `Importación Histórica`.trim();
-
-  // 1. Transaction for COMPRAS (Entradas)
-  const compras = productos.filter(p => (parseInt(p.entradaCant) || 0) > 0);
-  if (compras.length > 0) {
-    await tenantPrisma.transaccion.create({
-      data: {
-        tipoTransaccion: "COMPRA",
-        nroDocumento: "IMP-COMPRA-" + ts,
-        nitCi: "0",
-        razonSocial: "SISTEMA - HISTÓRICO",
-        observaciones: desc,
-        formaPago: "NINGUNO",
-        fecha: yearDateStart,
-        createdAt: yearDateStart,
-        detalles: {
-          create: compras.map(p => {
-            const qty = parseInt(p.entradaCant) || 0;
-            const unitCost = parseFloat(p.costo) || 0;
-            return {
-              productoCodigo: p.codigo,
-              cantidad: qty,
-              precioUnitario: unitCost,
-              subtotal: qty * unitCost
-            };
-          })
-        }
-      }
-    });
-  }
-
-  // 2. Transaction for VENTAS (Salidas)
-  const ventas = productos.filter(p => (parseInt(p.salidaCant) || 0) > 0);
-  if (ventas.length > 0) {
-    await tenantPrisma.transaccion.create({
-      data: {
-        tipoTransaccion: "VENTA",
-        nroDocumento: "IMP-VENTA-" + ts,
-        nitCi: "0",
-        razonSocial: "SISTEMA - HISTÓRICO",
-        observaciones: desc,
-        formaPago: "NINGUNO",
-        fecha: yearDateEnd,
-        createdAt: yearDateEnd,
-        detalles: {
-          create: ventas.map(p => {
-            const qty = parseInt(p.salidaCant) || 0;
-            const unitSale = parseFloat(p.precioVenta) || 0;
-            return {
-              productoCodigo: p.codigo,
-              cantidad: qty,
-              precioUnitario: unitSale,
-              subtotal: qty * unitSale
-            };
-          })
-        }
-      }
-    });
-  }
-
-  revalidatePath("/productos");
-  return productos.length;
 }
 
+export async function updateProducto(codigo: string, data: any) {
+  try {
+    const session = await getServerSession(authOptions);
+    const { tenantPrisma } = await getSessionTenantClient(session);
 
+    const updatedProduct = await tenantPrisma.producto.update({
+      where: { codigo },
+      data: {
+        nombre: data.nombre,
+        descripcion: data.descripcion || "",
+        marca: data.marca || "",
+        unidadMedida: data.unidadMedida || "Unidad",
+        stock: data.stock || 0,
+        costo: data.costo || 0,
+        precioVenta: data.precioVenta || 0,
+        metodoInventario: data.metodoInventario || "Promedio Ponderado",
+        proveedorId: data.proveedorId || null,
+        categoriaId: data.categoriaId || null,
+      }
+    });
+
+    revalidatePath("/productos");
+    return updatedProduct;
+  } catch (err: any) {
+    console.error("[updateProducto Error]:", err);
+    throw new Error(err.message || "Error al actualizar producto");
+  }
+}
+
+export async function deleteProducto(codigo: string) {
+  try {
+    const session = await getServerSession(authOptions);
+    const { tenantPrisma } = await getSessionTenantClient(session);
+
+    // Soft delete: Ocultar producto de la vista y liberar su código original
+    await tenantPrisma.producto.update({
+      where: { codigo },
+      data: { 
+        activo: false,
+        codigo: `DEL-${Date.now()}-${codigo}` 
+      }
+    });
+
+    revalidatePath("/productos");
+  } catch (err: any) {
+    console.error("[deleteProducto Error]:", err);
+    throw new Error(err.message || "Error al eliminar producto");
+  }
+}
+
+export async function importProductos(productos: any[], descripcion?: string, importDateStr?: string) {
+  try {
+    const session = await getServerSession(authOptions);
+    const { tenantPrisma } = await getSessionTenantClient(session);
+
+    if (productos.length === 0) {
+      return 0;
+    }
+
+    const yearDateStart = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
+    const yearDateEnd = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
+
+    for (const p of productos) {
+      const qtyStock = parseInt(p.stock) || 0;
+      const cost = parseFloat(p.costo) || 0;
+      const pVenta = parseFloat(p.precioVenta) || 0;
+      
+      const exists = await tenantPrisma.producto.findUnique({
+        where: { codigo: p.codigo }
+      });
+
+      if (exists) {
+        await tenantPrisma.producto.update({
+          where: { codigo: p.codigo },
+          data: {
+            nombre: p.nombre,
+            descripcion: p.descripcion || "",
+            marca: p.marca || "",
+            unidadMedida: p.unidadMedida || "Unidad",
+            stock: qtyStock,
+            costo: cost,
+            precioVenta: pVenta,
+            createdAt: yearDateStart,
+          }
+        });
+      } else {
+        await tenantPrisma.producto.create({
+          data: {
+            codigo: p.codigo,
+            nombre: p.nombre,
+            descripcion: p.descripcion || "",
+            marca: p.marca || "",
+            unidadMedida: p.unidadMedida || "Unidad",
+            stock: qtyStock,
+            costo: cost,
+            precioVenta: pVenta,
+            metodoInventario: p.metodoInventario || "Promedio Ponderado",
+            proveedorId: null,
+            createdAt: yearDateStart,
+          }
+        });
+      }
+    }
+
+    const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+    const desc = descripcion || `Importación Histórica`.trim();
+
+    // 1. Transaction for COMPRAS (Entradas)
+    const compras = productos.filter(p => (parseInt(p.entradaCant) || 0) > 0);
+    if (compras.length > 0) {
+      await tenantPrisma.transaccion.create({
+        data: {
+          tipoTransaccion: "COMPRA",
+          nroDocumento: "IMP-COMPRA-" + ts,
+          nitCi: "0",
+          razonSocial: "SISTEMA - HISTÓRICO",
+          observaciones: desc,
+          formaPago: "NINGUNO",
+          fecha: yearDateStart,
+          createdAt: yearDateStart,
+          detalles: {
+            create: compras.map(p => {
+              const qty = parseInt(p.entradaCant) || 0;
+              const unitCost = parseFloat(p.costo) || 0;
+              return {
+                productoCodigo: p.codigo,
+                cantidad: qty,
+                precioUnitario: unitCost,
+                subtotal: qty * unitCost
+              };
+            })
+          }
+        }
+      });
+    }
+
+    // 2. Transaction for VENTAS (Salidas)
+    const ventas = productos.filter(p => (parseInt(p.salidaCant) || 0) > 0);
+    if (ventas.length > 0) {
+      await tenantPrisma.transaccion.create({
+        data: {
+          tipoTransaccion: "VENTA",
+          nroDocumento: "IMP-VENTA-" + ts,
+          nitCi: "0",
+          razonSocial: "SISTEMA - HISTÓRICO",
+          observaciones: desc,
+          formaPago: "NINGUNO",
+          fecha: yearDateEnd,
+          createdAt: yearDateEnd,
+          detalles: {
+            create: ventas.map(p => {
+              const qty = parseInt(p.salidaCant) || 0;
+              const unitSale = parseFloat(p.precioVenta) || 0;
+              return {
+                productoCodigo: p.codigo,
+                cantidad: qty,
+                precioUnitario: unitSale,
+                subtotal: qty * unitSale
+              };
+            })
+          }
+        }
+      });
+    }
+
+    revalidatePath("/productos");
+    return productos.length;
+  } catch (err: any) {
+    console.error("[importProductos Error]:", err);
+    throw new Error(err.message || "Error al importar productos");
+  }
+}

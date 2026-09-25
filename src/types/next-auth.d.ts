@@ -8,9 +8,10 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       role: string;
-      tenants: { id: string; name: string; connectionString: string }[];
+      tenants: any[];
       currentTenantId?: string;
       currentConnectionString?: string;
+      currentTenant?: any;
     };
   }
 
@@ -19,6 +20,6 @@ declare module "next-auth" {
     name?: string | null;
     email?: string | null;
     role: string;
-    tenants: { id: string; name: string; connectionString: string }[];
+    tenants?: any[];
   }
 }

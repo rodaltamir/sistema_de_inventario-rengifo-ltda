@@ -24,25 +24,12 @@ export const authOptions: NextAuthOptions = {
         const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
         if (!isPasswordValid) return null;
 
-        const allTenants = await masterPrisma.tenant.findMany();
-        const userTenantIds = user.tenantUsers.map(tu => tu.tenantId);
-
         return {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
-          tenants: allTenants.map(t => ({
-            id: t.id,
-            name: t.name,
-            nit: t.nit,
-            casaMatriz: t.casaMatriz,
-            sucursal: t.sucursal,
-            telefono: t.telefono,
-            logo: t.logo && t.logo.length > 255 ? "Building" : t.logo, // Prevents 431 error from base64
-            connectionString: t.connectionString,
-            isOwner: userTenantIds.includes(t.id)
-          }))
+          tenants: []
         };
       }
     })
@@ -52,20 +39,43 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
-        token.tenants = user.tenants;
+
+        // Auto-seleccionar la empresa inicial para que el usuario siempre tenga conexión válida
+        try {
+          const userWithTenants = await masterPrisma.user.findUnique({
+            where: { id: user.id },
+            include: { tenantUsers: { include: { tenant: true } } }
+          });
+          const initialTenant = userWithTenants?.tenantUsers?.[0]?.tenant || await masterPrisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
+          if (initialTenant) {
+            token.currentTenantId = initialTenant.id;
+            token.currentConnectionString = initialTenant.connectionString;
+            token.currentTenant = {
+              id: initialTenant.id,
+              name: initialTenant.name,
+              nit: initialTenant.nit,
+              casaMatriz: initialTenant.casaMatriz,
+              sucursal: initialTenant.sucursal,
+              telefono: initialTenant.telefono,
+              logo: initialTenant.logo && initialTenant.logo.length > 255 ? "Building" : initialTenant.logo,
+              connectionString: initialTenant.connectionString,
+              isOwner: true
+            };
+          }
+        } catch (e) {
+          console.error("Error inicializando tenant en JWT:", e);
+        }
       }
-      if (trigger === "update") {
-        if (session?.tenantId) {
-          token.currentTenantId = session.tenantId;
-          // Buscar directamente en la BD maestra para garantizar siempre el connectionString fresco
+
+      if (trigger === "update" && session?.tenantId) {
+        token.currentTenantId = session.tenantId;
+        try {
           const tenantDb = await masterPrisma.tenant.findUnique({
             where: { id: session.tenantId }
           });
           if (tenantDb) {
             token.currentConnectionString = tenantDb.connectionString;
-            const list = Array.isArray(token.tenants) ? [...token.tenants] : [];
-            const idx = list.findIndex((t: any) => t.id === tenantDb.id);
-            const tenantObj = {
+            token.currentTenant = {
               id: tenantDb.id,
               name: tenantDb.name,
               nit: tenantDb.nit,
@@ -76,49 +86,22 @@ export const authOptions: NextAuthOptions = {
               connectionString: tenantDb.connectionString,
               isOwner: true
             };
-            if (idx >= 0) {
-              list[idx] = tenantObj;
-            } else {
-              list.push(tenantObj);
-            }
-            token.tenants = list;
-          } else {
-            const tenant = (token.tenants as any[])?.find((t: any) => t.id === session.tenantId);
-            token.currentConnectionString = tenant?.connectionString;
           }
-        } else if (session?.action === 'refreshTenants') {
-          // Refetch all tenants from DB for global access
-          const dbUser = await masterPrisma.user.findUnique({
-            where: { id: token.id as string },
-            include: { tenantUsers: true }
-          });
-          const allTenants = await masterPrisma.tenant.findMany();
-          
-          if (dbUser) {
-            const userTenantIds = dbUser.tenantUsers.map(tu => tu.tenantId);
-            token.tenants = allTenants.map(t => ({
-              id: t.id,
-              name: t.name,
-              nit: t.nit,
-              casaMatriz: t.casaMatriz,
-              sucursal: t.sucursal,
-              telefono: t.telefono,
-              logo: t.logo && t.logo.length > 255 ? "Building" : t.logo, // Prevents 431 error from base64
-              connectionString: t.connectionString,
-              isOwner: userTenantIds.includes(t.id) || dbUser.role === 'SUPERADMIN'
-            }));
-          }
+        } catch (e) {
+          console.error("Error actualizando tenant en JWT:", e);
         }
       }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
-        session.user.tenants = token.tenants as any;
         session.user.currentTenantId = token.currentTenantId as string | undefined;
         session.user.currentConnectionString = token.currentConnectionString as string | undefined;
+        const currentTenantObj = (token.currentTenant as any) || null;
+        session.user.tenants = currentTenantObj ? [currentTenantObj] : [];
       }
       return session;
     }
