@@ -4,6 +4,8 @@ import { getTenantClient } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import ProductosClient from "./ProductosClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function ProductosPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.currentConnectionString) redirect("/select-company");

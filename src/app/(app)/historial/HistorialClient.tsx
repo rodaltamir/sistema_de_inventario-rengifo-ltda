@@ -151,9 +151,9 @@ export default function HistorialClient({
         : [
             {
               productoCodigo: productos[0]?.codigo || "",
-              cantidad: 1,
+              cantidad: 0,
               precioUnitario: productos[0]?.costo || 0,
-              subtotal: productos[0]?.costo || 0
+              subtotal: 0
             }
           ]
     });
@@ -176,9 +176,6 @@ export default function HistorialClient({
       if (!d.productoCodigo) {
         return Swal.fire("Producto no seleccionado", "Todos los ítems deben tener un producto válido.", "warning");
       }
-      if (Number(d.cantidad) <= 0) {
-        return Swal.fire("Cantidad inválida", "La cantidad debe ser mayor a cero.", "warning");
-      }
     }
 
     setIsSavingEdit(true);
@@ -192,12 +189,16 @@ export default function HistorialClient({
         formaPago: editingTx.formaPago,
         descuento: Number(editingTx.descuento) || 0,
         observaciones: editingTx.observaciones ? editingTx.observaciones.trim() : "",
-        detalles: editingTx.detalles.map((d: any) => ({
-          productoCodigo: d.productoCodigo,
-          cantidad: Math.round(Number(d.cantidad)),
-          precioUnitario: Number(d.precioUnitario) || 0,
-          subtotal: Math.round(Number(d.cantidad)) * (Number(d.precioUnitario) || 0)
-        }))
+        detalles: editingTx.detalles.map((d: any) => {
+          const cant = d.cantidad === "" || isNaN(Number(d.cantidad)) ? 0 : Math.round(Number(d.cantidad));
+          const pu = Number(d.precioUnitario) || 0;
+          return {
+            productoCodigo: d.productoCodigo,
+            cantidad: cant,
+            precioUnitario: pu,
+            subtotal: cant * pu
+          };
+        })
       });
 
       // Actualizar estado local reactivo
@@ -214,15 +215,19 @@ export default function HistorialClient({
               formaPago: editingTx.formaPago,
               descuento: Number(editingTx.descuento) || 0,
               observaciones: editingTx.observaciones ? editingTx.observaciones.trim() : null,
-              detalles: editingTx.detalles.map((d: any, idx: number) => ({
-                id: item.detalles?.[idx]?.id || `temp-${idx}`,
-                transaccionId: item.id,
-                productoCodigo: d.productoCodigo,
-                cantidad: Math.round(Number(d.cantidad)),
-                precioUnitario: Number(d.precioUnitario) || 0,
-                subtotal: Math.round(Number(d.cantidad)) * (Number(d.precioUnitario) || 0),
-                producto: productos.find((p) => p.codigo === d.productoCodigo) || { nombre: d.productoCodigo }
-              }))
+              detalles: editingTx.detalles.map((d: any, idx: number) => {
+                const cant = d.cantidad === "" || isNaN(Number(d.cantidad)) ? 0 : Math.round(Number(d.cantidad));
+                const pu = Number(d.precioUnitario) || 0;
+                return {
+                  id: item.detalles?.[idx]?.id || `temp-${idx}`,
+                  transaccionId: item.id,
+                  productoCodigo: d.productoCodigo,
+                  cantidad: cant,
+                  precioUnitario: pu,
+                  subtotal: cant * pu,
+                  producto: productos.find((p) => p.codigo === d.productoCodigo) || { nombre: d.productoCodigo }
+                };
+              })
             };
           }
           return item;
@@ -240,15 +245,19 @@ export default function HistorialClient({
           formaPago: editingTx.formaPago,
           descuento: Number(editingTx.descuento) || 0,
           observaciones: editingTx.observaciones ? editingTx.observaciones.trim() : null,
-          detalles: editingTx.detalles.map((d: any, idx: number) => ({
-            id: selectedTx.detalles?.[idx]?.id || `temp-${idx}`,
-            transaccionId: selectedTx.id,
-            productoCodigo: d.productoCodigo,
-            cantidad: Math.round(Number(d.cantidad)),
-            precioUnitario: Number(d.precioUnitario) || 0,
-            subtotal: Math.round(Number(d.cantidad)) * (Number(d.precioUnitario) || 0),
-            producto: productos.find((p) => p.codigo === d.productoCodigo) || { nombre: d.productoCodigo }
-          }))
+          detalles: editingTx.detalles.map((d: any, idx: number) => {
+            const cant = d.cantidad === "" || isNaN(Number(d.cantidad)) ? 0 : Math.round(Number(d.cantidad));
+            const pu = Number(d.precioUnitario) || 0;
+            return {
+              id: selectedTx.detalles?.[idx]?.id || `temp-${idx}`,
+              transaccionId: selectedTx.id,
+              productoCodigo: d.productoCodigo,
+              cantidad: cant,
+              precioUnitario: pu,
+              subtotal: cant * pu,
+              producto: productos.find((p) => p.codigo === d.productoCodigo) || { nombre: d.productoCodigo }
+            };
+          })
         });
       }
 
@@ -625,38 +634,38 @@ export default function HistorialClient({
 
         if (isInicial) {
           tipo = "INVENTARIO INICIAL";
-          cant = entradaCant > 0 ? entradaCant : (salidaCant > 0 ? salidaCant : 1);
-          subtotal = entradaBs > 0 ? entradaBs : cant * pu;
-        } else if (entradaCant > 0 && salidaCant === 0) {
-          // Si la cantidad está registrada en la columna ENTRADAS, es una ENTRADA (Compra o Ajuste Positivo)
+          cant = entradaCant !== 0 ? entradaCant : (salidaCant !== 0 ? salidaCant : 1);
+          subtotal = Math.abs(entradaBs) > 0 ? entradaBs : cant * pu;
+        } else if (entradaCant !== 0 && salidaCant === 0) {
+          // Si la cantidad está registrada en la columna ENTRADAS, es una ENTRADA (Compra o Ajuste Positivo/Negativo)
           tipo = "COMPRA";
           cant = entradaCant;
-          subtotal = entradaBs > 0 ? entradaBs : cant * pu;
-        } else if (salidaCant > 0 && entradaCant === 0) {
-          // Si la cantidad está registrada en la columna SALIDAS, es una SALIDA (Venta o Ajuste Negativo)
+          subtotal = Math.abs(entradaBs) > 0 ? entradaBs : cant * pu;
+        } else if (salidaCant !== 0 && entradaCant === 0) {
+          // Si la cantidad está registrada en la columna SALIDAS, es una SALIDA (Venta o Ajuste Positivo/Negativo)
           tipo = "VENTA";
           cant = salidaCant;
-          subtotal = salidaBs > 0 ? salidaBs : cant * pu;
+          subtotal = Math.abs(salidaBs) > 0 ? salidaBs : cant * pu;
         } else if (isCompra) {
           tipo = "COMPRA";
-          cant = entradaCant > 0 ? entradaCant : 1;
-          subtotal = entradaBs > 0 ? entradaBs : cant * pu;
+          cant = entradaCant !== 0 ? entradaCant : (salidaCant !== 0 ? -salidaCant : 0);
+          subtotal = entradaBs !== 0 ? entradaBs : cant * pu;
         } else if (isVenta) {
           tipo = "VENTA";
-          cant = salidaCant > 0 ? salidaCant : 1;
-          subtotal = salidaBs > 0 ? salidaBs : cant * pu;
+          cant = salidaCant !== 0 ? salidaCant : (entradaCant !== 0 ? -entradaCant : 0);
+          subtotal = salidaBs !== 0 ? salidaBs : cant * pu;
         } else if (isAjuste) {
-          tipo = entradaCant > 0 ? "COMPRA" : "VENTA";
-          cant = entradaCant > 0 ? entradaCant : (salidaCant > 0 ? salidaCant : 1);
-          subtotal = (entradaCant > 0 ? entradaBs : salidaBs) || cant * pu;
+          tipo = entradaCant !== 0 ? "COMPRA" : "VENTA";
+          cant = entradaCant !== 0 ? entradaCant : (salidaCant !== 0 ? salidaCant : 0);
+          subtotal = (entradaCant !== 0 ? entradaBs : salidaBs) || cant * pu;
         }
 
         let finalPu = Math.abs(pu);
-        cant = Math.max(1, Math.abs(cant));
-        subtotal = Math.abs(subtotal);
+        cant = isNaN(cant) ? 0 : cant;
+        subtotal = isNaN(subtotal) ? 0 : subtotal;
 
-        if (finalPu === 0 && cant > 0 && subtotal > 0) finalPu = subtotal / cant;
-        if (subtotal === 0 && cant > 0 && finalPu > 0) subtotal = cant * finalPu;
+        if (finalPu === 0 && cant !== 0 && subtotal !== 0) finalPu = Math.abs(subtotal / cant);
+        if (subtotal === 0 && cant !== 0 && finalPu > 0) subtotal = cant * finalPu;
 
         const prodCod = currentProd ? currentProd.codigo : "";
         if (prodCod && detectedProdsMap.has(prodCod)) {
@@ -1280,9 +1289,9 @@ export default function HistorialClient({
                         ...editingTx.detalles,
                         {
                           productoCodigo: firstProd,
-                          cantidad: 1,
+                          cantidad: 0,
                           precioUnitario: firstProdCost,
-                          subtotal: firstProdCost
+                          subtotal: 0
                         }
                       ]
                     });
@@ -1319,11 +1328,15 @@ export default function HistorialClient({
                                   ? (prodObj?.precioVenta || prodObj?.costo || 0)
                                   : (prodObj?.costo || 0);
                                 const updatedDetalles = [...editingTx.detalles];
+                                const currentPrice = d.precioUnitario !== "" && !isNaN(Number(d.precioUnitario)) && Number(d.precioUnitario) > 0
+                                  ? Number(d.precioUnitario)
+                                  : defaultPrice;
+                                const cantNum = d.cantidad === "" || isNaN(Number(d.cantidad)) ? 0 : Number(d.cantidad);
                                 updatedDetalles[idx] = {
                                   ...updatedDetalles[idx],
                                   productoCodigo: newCode,
-                                  precioUnitario: d.precioUnitario > 0 ? d.precioUnitario : defaultPrice,
-                                  subtotal: Number(d.cantidad) * (d.precioUnitario > 0 ? d.precioUnitario : defaultPrice)
+                                  precioUnitario: currentPrice,
+                                  subtotal: cantNum * currentPrice
                                 };
                                 setEditingTx({ ...editingTx, detalles: updatedDetalles });
                               }}
@@ -1338,18 +1351,18 @@ export default function HistorialClient({
                           <td>
                             <input
                               type="number"
-                              min="1"
-                              step="1"
+                              step="any"
                               className={styles.editInput}
                               style={{ width: "100%" }}
                               value={d.cantidad}
                               onChange={(e) => {
-                                const newQty = Math.max(1, parseInt(e.target.value) || 1);
+                                const val = e.target.value;
+                                const cantNum = val === "" || isNaN(Number(val)) ? 0 : Number(val);
                                 const updatedDetalles = [...editingTx.detalles];
                                 updatedDetalles[idx] = {
                                   ...updatedDetalles[idx],
-                                  cantidad: newQty,
-                                  subtotal: newQty * Number(d.precioUnitario || 0)
+                                  cantidad: val,
+                                  subtotal: cantNum * Number(d.precioUnitario || 0)
                                 };
                                 setEditingTx({ ...editingTx, detalles: updatedDetalles });
                               }}
@@ -1358,25 +1371,29 @@ export default function HistorialClient({
                           <td>
                             <input
                               type="number"
-                              min="0"
-                              step="0.01"
+                              step="any"
                               className={styles.editInput}
                               style={{ width: "100%" }}
                               value={d.precioUnitario}
                               onChange={(e) => {
-                                const newPrice = Math.max(0, parseFloat(e.target.value) || 0);
+                                const val = e.target.value;
+                                const priceNum = val === "" || isNaN(Number(val)) ? 0 : Number(val);
+                                const cantNum = d.cantidad === "" || isNaN(Number(d.cantidad)) ? 0 : Number(d.cantidad);
                                 const updatedDetalles = [...editingTx.detalles];
                                 updatedDetalles[idx] = {
                                   ...updatedDetalles[idx],
-                                  precioUnitario: newPrice,
-                                  subtotal: Number(d.cantidad || 0) * newPrice
+                                  precioUnitario: val,
+                                  subtotal: cantNum * priceNum
                                 };
                                 setEditingTx({ ...editingTx, detalles: updatedDetalles });
                               }}
                             />
                           </td>
                           <td style={{ fontWeight: "bold", color: "#0f172a" }}>
-                            Bs. {(Number(d.cantidad || 0) * Number(d.precioUnitario || 0)).toFixed(2)}
+                            Bs. {(
+                              (d.cantidad === "" || isNaN(Number(d.cantidad)) ? 0 : Number(d.cantidad)) *
+                              (d.precioUnitario === "" || isNaN(Number(d.precioUnitario)) ? 0 : Number(d.precioUnitario))
+                            ).toFixed(2)}
                           </td>
                           <td style={{ textAlign: "center" }}>
                             <button

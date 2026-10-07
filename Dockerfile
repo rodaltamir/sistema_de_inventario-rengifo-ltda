@@ -69,6 +69,6 @@ EXPOSE 8080
 
 ENV PORT 8080
 ENV HOSTNAME "0.0.0.0"
-ENV NODE_OPTIONS="--max-http-header-size=65536"
+ENV NODE_OPTIONS="--max-http-header-size=65536 --max-old-space-size=4096"
 
 CMD ["node", "server.js"]

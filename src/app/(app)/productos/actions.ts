@@ -82,7 +82,7 @@ export async function createProducto(data: {
       }
     });
 
-    if (data.stock > 0) {
+    if (data.stock !== 0) {
       const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
       await tenantPrisma.transaccion.create({
         data: {
@@ -222,7 +222,7 @@ export async function importProductos(productos: any[], descripcion?: string, im
     const desc = descripcion || `Importación Histórica`.trim();
 
     // 1. Transaction for COMPRAS (Entradas)
-    const compras = productos.filter(p => (parseInt(p.entradaCant) || 0) > 0);
+    const compras = productos.filter(p => (parseInt(p.entradaCant) || 0) !== 0);
     if (compras.length > 0) {
       await tenantPrisma.transaccion.create({
         data: {
@@ -251,7 +251,7 @@ export async function importProductos(productos: any[], descripcion?: string, im
     }
 
     // 2. Transaction for VENTAS (Salidas)
-    const ventas = productos.filter(p => (parseInt(p.salidaCant) || 0) > 0);
+    const ventas = productos.filter(p => (parseInt(p.salidaCant) || 0) !== 0);
     if (ventas.length > 0) {
       await tenantPrisma.transaccion.create({
         data: {
@@ -272,6 +272,40 @@ export async function importProductos(productos: any[], descripcion?: string, im
                 cantidad: qty,
                 precioUnitario: unitSale,
                 subtotal: qty * unitSale
+              };
+            })
+          }
+        }
+      });
+    }
+
+    // 3. Fallback for products with initial stock but neither entradaCant nor salidaCant
+    const saldosIniciales = productos.filter(p => {
+      const ec = parseInt(p.entradaCant) || 0;
+      const sc = parseInt(p.salidaCant) || 0;
+      const stk = parseInt(p.stock) || 0;
+      return ec === 0 && sc === 0 && stk !== 0;
+    });
+    if (saldosIniciales.length > 0) {
+      await tenantPrisma.transaccion.create({
+        data: {
+          tipoTransaccion: "SALDO INICIAL",
+          nroDocumento: "IMP-INI-" + ts,
+          nitCi: "0",
+          razonSocial: "SISTEMA - SALDO INICIAL",
+          observaciones: desc,
+          formaPago: "NINGUNO",
+          fecha: yearDateStart,
+          createdAt: yearDateStart,
+          detalles: {
+            create: saldosIniciales.map(p => {
+              const qty = parseInt(p.stock) || 0;
+              const unitCost = parseFloat(p.costo) || 0;
+              return {
+                productoCodigo: p.codigo,
+                cantidad: qty,
+                precioUnitario: unitCost,
+                subtotal: qty * unitCost
               };
             })
           }

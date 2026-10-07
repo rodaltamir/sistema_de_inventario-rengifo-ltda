@@ -71,15 +71,14 @@ export async function importarTransacciones(
       fechaObj = new Date();
     }
 
-    const cant = Math.max(1, Math.abs(Math.round(m.cantidad || 1)));
-    let pu = Math.max(0, Math.abs(m.precioUnitario || 0));
-    let sub = Math.max(0, Math.abs(m.subtotal || 0));
-
-    if (pu === 0 && sub > 0 && cant > 0) {
-      pu = Number((sub / cant).toFixed(4));
-    }
-    if (sub === 0 && pu > 0 && cant > 0) {
+    const cant = isNaN(Number(m.cantidad)) ? 0 : Math.round(Number(m.cantidad));
+    let pu = Math.max(0, Math.abs(Number(m.precioUnitario) || 0));
+    let sub = Number(m.subtotal);
+    if (isNaN(sub) || sub === 0) {
       sub = Number((cant * pu).toFixed(2));
+    }
+    if (pu === 0 && sub !== 0 && cant !== 0) {
+      pu = Number(Math.abs(sub / cant).toFixed(4));
     }
 
     const docKey = (m.nroDocumento || "").trim() || `DOC-IMP-${idx + 1}`;
@@ -352,8 +351,8 @@ export async function importarTransacciones(
     if (detExistente) {
       detExistente.cantidad += m.cantidad;
       detExistente.subtotal += m.subtotal;
-      if (detExistente.cantidad > 0) {
-        detExistente.precioUnitario = Number((detExistente.subtotal / detExistente.cantidad).toFixed(4));
+      if (detExistente.cantidad !== 0) {
+        detExistente.precioUnitario = Math.abs(Number((detExistente.subtotal / detExistente.cantidad).toFixed(4)));
       }
     } else {
       grupo.detalles.push({
@@ -708,18 +707,25 @@ export async function editarTransaccion(transaccionId: string, data: Transaccion
       }
     }
 
-    // 2. Aplicar el stock de los NUEVOS detalles
+    // 2. Aplicar el stock y precios de los NUEVOS detalles
     for (const newD of data.detalles) {
-      const cant = Math.round(Number(newD.cantidad)) || 0;
+      const cant = isNaN(Number(newD.cantidad)) ? 0 : Math.round(Number(newD.cantidad));
+      const pu = Number(newD.precioUnitario) || 0;
       if (data.tipoTransaccion === "VENTA") {
         await tx.producto.update({
           where: { codigo: newD.productoCodigo },
-          data: { stock: { decrement: cant } }
+          data: {
+            stock: { decrement: cant },
+            ...(pu > 0 ? { precioVenta: pu } : {})
+          }
         });
       } else {
         await tx.producto.update({
           where: { codigo: newD.productoCodigo },
-          data: { stock: { increment: cant } }
+          data: {
+            stock: { increment: cant },
+            ...(pu > 0 ? { costo: pu } : {})
+          }
         });
       }
     }
@@ -730,13 +736,20 @@ export async function editarTransaccion(transaccionId: string, data: Transaccion
     });
 
     await tx.detalleTransaccion.createMany({
-      data: data.detalles.map((d) => ({
-        transaccionId,
-        productoCodigo: d.productoCodigo,
-        cantidad: Math.round(Number(d.cantidad)) || 1,
-        precioUnitario: Number(d.precioUnitario) || 0,
-        subtotal: Number(d.subtotal) || ((Math.round(Number(d.cantidad)) || 1) * (Number(d.precioUnitario) || 0))
-      }))
+      data: data.detalles.map((d) => {
+        const cant = isNaN(Number(d.cantidad)) ? 0 : Math.round(Number(d.cantidad));
+        const pu = Number(d.precioUnitario) || 0;
+        const sub = d.subtotal !== undefined && d.subtotal !== null && !isNaN(Number(d.subtotal))
+          ? Number(d.subtotal)
+          : cant * pu;
+        return {
+          transaccionId,
+          productoCodigo: d.productoCodigo,
+          cantidad: cant,
+          precioUnitario: pu,
+          subtotal: sub
+        };
+      })
     });
 
     // 4. Actualizar cabecera de la transacción

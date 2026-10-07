@@ -201,11 +201,11 @@ export async function POST(req: Request) {
           }
 row.getCell('I').value = r.unidad;
         
-        row.getCell('J').value = r.entradas > 0 ? Number(r.entradas) : '-';
-        const puEntrada = r.entradas > 0 ? (r.entradasBs / r.entradas) : 0;
+        row.getCell('J').value = r.entradas !== 0 ? Number(r.entradas) : '-';
+        const puEntrada = r.entradas !== 0 ? Math.abs(r.entradasBs / r.entradas) : 0;
         
-        row.getCell('M').value = r.salidas > 0 ? Number(r.salidas) : '-';
-        const puSalida = r.salidas > 0 ? (r.salidasBs / r.salidas) : 0;
+        row.getCell('M').value = r.salidas !== 0 ? Number(r.salidas) : '-';
+        const puSalida = r.salidas !== 0 ? Math.abs(r.salidasBs / r.salidas) : 0;
         
         row.getCell('P').value = Number(r.saldo != null ? r.saldo : 0);
 
@@ -218,10 +218,10 @@ row.getCell('I').value = r.unidad;
 
         if (conImportes) {
            row.getCell('K').value = puEntrada > 0 ? Number(puEntrada.toFixed(6)) : '-';
-           row.getCell('L').value = r.entradasBs > 0 ? Number(r.entradasBs.toFixed(6)) : '-';
+           row.getCell('L').value = r.entradasBs !== 0 ? Number(r.entradasBs.toFixed(6)) : '-';
            
            row.getCell('N').value = puSalida > 0 ? Number(puSalida.toFixed(6)) : '-';
-           row.getCell('O').value = r.salidasBs > 0 ? Number(r.salidasBs.toFixed(6)) : '-';
+           row.getCell('O').value = r.salidasBs !== 0 ? Number(r.salidasBs.toFixed(6)) : '-';
            
            row.getCell('Q').value = Number((r.saldoBs || 0).toFixed(6));
 
@@ -284,8 +284,8 @@ row.getCell('I').value = r.unidad;
           totSaldoCant += r.saldo; totSaldoBs += r.saldoBs;
         });
 
-        finalRow.getCell('J').value = totEntCant > 0 ? totEntCant : '-';
-        finalRow.getCell('M').value = totSalCant > 0 ? totSalCant : '-';
+        finalRow.getCell('J').value = totEntCant !== 0 ? totEntCant : '-';
+        finalRow.getCell('M').value = totSalCant !== 0 ? totSalCant : '-';
         finalRow.getCell('P').value = totSaldoCant;
 
         // Formato numérico entero para Cantidades en Totales
@@ -407,10 +407,10 @@ row.getCell('I').value = r.unidad;
         row.getCell('F').value = mov.factura || '-'; // FACTURA
         
         // ENTRADAS
-        row.getCell('G').value = mov.entradas > 0 ? Number(mov.entradas) : '-'; // CANTIDAD
+        row.getCell('G').value = mov.entradas !== 0 ? Number(mov.entradas) : '-'; // CANTIDAD
         
         // SALIDAS
-        row.getCell('J').value = mov.salidas > 0 ? Number(mov.salidas) : '-'; // CANTIDAD
+        row.getCell('J').value = mov.salidas !== 0 ? Number(mov.salidas) : '-'; // CANTIDAD
         
         // SALDO
         row.getCell('M').value = (mov.saldoFisico !== undefined ? Number(mov.saldoFisico) : '-'); // CANTIDAD
@@ -424,20 +424,21 @@ row.getCell('I').value = r.unidad;
         
         if (conImportes) {
           // Entradas P/U y Total
-          if (mov.entradas > 0 || mov.movimiento === 'SALDO INICIAL') {
-            row.getCell('H').value = mov.precioUnitario > 0 ? Number(Number(mov.precioUnitario).toFixed(6)) : '-';
-            row.getCell('I').value = mov.ingresoBs > 0 ? Number(Number(mov.ingresoBs).toFixed(6)) : '-';
+          if (mov.entradas !== 0 || mov.movimiento === 'SALDO INICIAL') {
+            const puEntrada = mov.precioUnitario > 0 ? mov.precioUnitario : (mov.entradas !== 0 ? Math.abs(mov.ingresoBs / mov.entradas) : 0);
+            row.getCell('H').value = puEntrada > 0 ? Number(Number(puEntrada).toFixed(6)) : '-';
+            row.getCell('I').value = mov.ingresoBs !== 0 ? Number(Number(mov.ingresoBs).toFixed(6)) : '-';
           } else {
             row.getCell('H').value = '-';
             row.getCell('I').value = '-';
           }
           
           // Salidas P/U y Total
-          if (mov.salidas > 0) {
+          if (mov.salidas !== 0) {
             // Calculate output unit price or use existing
-            const puSalida = mov.salidas > 0 ? (mov.egresoBs / mov.salidas) : 0;
+            const puSalida = mov.precioUnitario > 0 ? mov.precioUnitario : (mov.salidas !== 0 ? Math.abs(mov.egresoBs / mov.salidas) : 0);
             row.getCell('K').value = puSalida > 0 ? Number(Number(puSalida).toFixed(6)) : '-';
-            row.getCell('L').value = mov.egresoBs > 0 ? Number(Number(mov.egresoBs).toFixed(6)) : '-';
+            row.getCell('L').value = mov.egresoBs !== 0 ? Number(Number(mov.egresoBs).toFixed(6)) : '-';
           } else {
             row.getCell('K').value = '-';
             row.getCell('L').value = '-';
@@ -501,14 +502,14 @@ row.getCell('I').value = r.unidad;
 
         movimientosList.forEach((r: any) => {
           if (r.movimiento !== 'SALDO INICIAL') {
-            if (r.entradas > 0) totEntCant += Number(r.entradas);
-            if (r.salidas > 0) totSalCant += Number(r.salidas);
-            if (r.ingresoBs > 0) totEntBs += Number(r.ingresoBs);
-            if (r.egresoBs > 0) totSalBs += Number(r.egresoBs);
+            if (r.entradas !== 0) totEntCant += Number(r.entradas);
+            if (r.salidas !== 0) totSalCant += Number(r.salidas);
+            if (r.ingresoBs !== 0) totEntBs += Number(r.ingresoBs);
+            if (r.egresoBs !== 0) totSalBs += Number(r.egresoBs);
           } else {
             // Also include Saldo Inicial in sum if we want, or not? Usually Saldo Inicial is counted as Entrada
-            if (r.entradas > 0) totEntCant += Number(r.entradas);
-            if (r.ingresoBs > 0) totEntBs += Number(r.ingresoBs);
+            if (r.entradas !== 0) totEntCant += Number(r.entradas);
+            if (r.ingresoBs !== 0) totEntBs += Number(r.ingresoBs);
           }
         });
 
@@ -519,15 +520,15 @@ row.getCell('I').value = r.unidad;
         finalRow.getCell('B').alignment = { ...finalRow.getCell('B').alignment,  horizontal: 'right', vertical: 'middle'  };
 
         // Fill Cantidad totals
-        finalRow.getCell('G').value = totEntCant > 0 ? totEntCant : '-';
+        finalRow.getCell('G').value = totEntCant !== 0 ? totEntCant : '-';
         finalRow.getCell('G').font = { ...finalRow.getCell('G').font,  bold: true  };
         finalRow.getCell('G').alignment = { ...finalRow.getCell('G').alignment,  horizontal: 'center', vertical: 'middle'  };
-        if (totEntCant > 0) finalRow.getCell('G').numFmt = '#,##0';
+        if (totEntCant !== 0) finalRow.getCell('G').numFmt = '#,##0';
 
-        finalRow.getCell('J').value = totSalCant > 0 ? totSalCant : '-';
+        finalRow.getCell('J').value = totSalCant !== 0 ? totSalCant : '-';
         finalRow.getCell('J').font = { ...finalRow.getCell('J').font,  bold: true  };
         finalRow.getCell('J').alignment = { ...finalRow.getCell('J').alignment,  horizontal: 'center', vertical: 'middle'  };
-        if (totSalCant > 0) finalRow.getCell('J').numFmt = '#,##0';
+        if (totSalCant !== 0) finalRow.getCell('J').numFmt = '#,##0';
 
         const lastMov = movimientosList.length > 0 ? movimientosList[movimientosList.length - 1] : null;
         const lastFisico = lastMov && lastMov.saldoFisico !== undefined && lastMov.saldoFisico !== '' ? Number(lastMov.saldoFisico) : 0;
@@ -540,12 +541,12 @@ row.getCell('I').value = r.unidad;
 
         if (conImportes) {
           finalRow.getCell('H').value = '-';
-          finalRow.getCell('I').value = totEntBs > 0 ? Number(totEntBs.toFixed(6)) : '-';
-          if (totEntBs > 0) finalRow.getCell('I').numFmt = '#,##0.00';
+          finalRow.getCell('I').value = totEntBs !== 0 ? Number(totEntBs.toFixed(6)) : '-';
+          if (totEntBs !== 0) finalRow.getCell('I').numFmt = '#,##0.00';
           
           finalRow.getCell('K').value = '-';
-          finalRow.getCell('L').value = totSalBs > 0 ? Number(totSalBs.toFixed(6)) : '-';
-          if (totSalBs > 0) finalRow.getCell('L').numFmt = '#,##0.00';
+          finalRow.getCell('L').value = totSalBs !== 0 ? Number(totSalBs.toFixed(6)) : '-';
+          if (totSalBs !== 0) finalRow.getCell('L').numFmt = '#,##0.00';
           
           finalRow.getCell('N').value = Number(Number(lastValorado).toFixed(6));
           finalRow.getCell('N').numFmt = '#,##0.00';

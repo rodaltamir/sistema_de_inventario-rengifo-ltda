@@ -60,18 +60,24 @@ export async function procesarTransaccion(data: {
         }
       });
 
-      // 2. Adjust Stock
+      // 2. Adjust Stock and Prices
       for (const d of data.detalles) {
         if (data.tipoTransaccion === "VENTA") {
           await tx.producto.update({
             where: { codigo: d.productoCodigo },
-            data: { stock: { decrement: d.cantidad } }
+            data: {
+              stock: { decrement: d.cantidad },
+              ...(d.precioUnitario > 0 ? { precioVenta: d.precioUnitario } : {})
+            }
           });
         } else {
           // COMPRA
           await tx.producto.update({
             where: { codigo: d.productoCodigo },
-            data: { stock: { increment: d.cantidad } }
+            data: {
+              stock: { increment: d.cantidad },
+              ...(d.precioUnitario > 0 ? { costo: d.precioUnitario } : {})
+            }
           });
         }
       }

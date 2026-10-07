@@ -12,6 +12,19 @@ services:
     # Removido el mapeo de puertos 5432:5432 hacia el host para evitar conflictos con otros proyectos haci para tener mayor escalabilidad
     volumes:
       - pgdata:/var/lib/postgresql/data
+    command: >
+      postgres
+      -c max_connections=300
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
+      -c work_mem=32MB
+      -c maintenance_work_mem=128MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
 
   app:
     build:
@@ -29,7 +42,7 @@ services:
       - NEXTAUTH_URL=http://rengifo_ltda:8080
       - AUTH_TRUST_HOST=true
       - NEXTAUTH_URL_INTERNAL=http://localhost:8080
-      - NODE_OPTIONS=--max-http-header-size=65536
+      - NODE_OPTIONS=--max-http-header-size=65536 --max-old-space-size=4096
     depends_on:
       - db
 

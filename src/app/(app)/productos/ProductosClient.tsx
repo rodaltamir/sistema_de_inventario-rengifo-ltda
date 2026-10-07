@@ -10,6 +10,14 @@ import styles from "./productos.module.css";
 export default function ProductosClient({ initialProductos, proveedores, initialCategorias }: { initialProductos: any[], proveedores: any[], initialCategorias?: any[] }) {
   const [productos, setProductos] = useState(initialProductos);
   const [categorias, setCategorias] = useState(initialCategorias || []);
+
+  useEffect(() => {
+    setProductos(initialProductos);
+  }, [initialProductos]);
+
+  useEffect(() => {
+    if (initialCategorias) setCategorias(initialCategorias);
+  }, [initialCategorias]);
   const [search, setSearch] = useState("");
   const [fechaInicio, setFechaInicio] = useState<string>("");
   const [fechaFin, setFechaFin] = useState<string>("");
@@ -398,11 +406,14 @@ export default function ProductosClient({ initialProductos, proveedores, initial
         const entradaCosto = parseNum(rawEntradaCosto);
         const salidaCosto = parseNum(rawSalidaCosto);
 
-        const costoUnitarioCalc = entradaCant > 0 ? (entradaCosto / entradaCant) : 0;
-          const costoUnitario = String(Math.round(costoUnitarioCalc * 1e6) / 1e6);
+        const costoUnitarioCalc = entradaCant !== 0 ? Math.abs(entradaCosto / entradaCant) : 0;
+        let costoUnitario = String(Math.round(costoUnitarioCalc * 1e6) / 1e6);
+        if (costoUnitarioCalc === 0 && saldoCant !== 0 && entradaCosto !== 0) {
+          costoUnitario = String(Math.round(Math.abs(entradaCosto / saldoCant) * 1e6) / 1e6);
+        }
           
-          const precioVentaCalc = salidaCant > 0 ? (salidaCosto / salidaCant) : 0;
-          const precioVentaUnitario = String(Math.round(precioVentaCalc * 1e6) / 1e6);
+        const precioVentaCalc = salidaCant !== 0 ? Math.abs(salidaCosto / salidaCant) : 0;
+        const precioVentaUnitario = String(Math.round(precioVentaCalc * 1e6) / 1e6);
 
         imported.push({
           id: Date.now() + Math.random(), // id temporal para la UI

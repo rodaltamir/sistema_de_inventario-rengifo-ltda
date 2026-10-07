@@ -4,6 +4,8 @@ import { getTenantClient } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import HistorialClient from "./HistorialClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function HistorialPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.currentConnectionString) redirect("/select-company");
@@ -15,7 +17,11 @@ export default async function HistorialPage() {
     include: {
       detalles: {
         include: {
-          producto: true
+          producto: {
+            select: {
+              nombre: true
+            }
+          }
         }
       },
       pagos: true,
