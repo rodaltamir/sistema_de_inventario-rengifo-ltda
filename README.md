@@ -228,18 +228,4 @@ Si deseas compartir el sistema en tu red local (oficina o negocio) para que otra
 | `docker compose logs -f app` | Muestra los registros en tiempo real del contenedor de la aplicación. |
 | `docker compose restart app` | Reinicia el contenedor de la aplicación. |
 
----
 
-## 🔑 Credenciales por Defecto
-
-- **Usuario**: `audirengifo.ltda@gmail.com`
-- **Contraseña**: `inventario18`
-- **Rol**: `SUPERADMIN`
-
-> ⚠️ **Nota de Seguridad**: Se recomienda cambiar la contraseña desde el módulo de configuración o mediante script tras el primer despliegue en un entorno productivo.
-
----
-
-## 📄 Licencia
-
-Desarrollado para **Rengifo Ltda.** Todos los derechos reservados.
