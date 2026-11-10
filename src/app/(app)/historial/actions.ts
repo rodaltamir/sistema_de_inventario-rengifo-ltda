@@ -46,6 +46,16 @@ export async function importarTransacciones(
     const nom = (m.productoNombre || "").trim();
     if (!cod && !nom) continue; // No tiene ni código ni nombre
 
+    // Filtrar instrucciones o notas que hayan sido leídas erróneamente como código/nombre
+    if (
+      cod.length > 45 ||
+      /^(?:IFICACI[OÓ]N|MODIFICACI[OÓ]N|CODIFICACI[OÓ]N|FORMULARIO|EJEMPLO|PLANTILLA|INSTRUCCI|OBSERVACI|RESUMEN|TOTALES|M[EÉ]TODO|CATEGOR[IÍ]A)/i.test(cod) ||
+      /FORMULARIO|PLANTILLA|INSTRUCCI[OÓ]N/i.test(cod) ||
+      /FORMULARIO.*EXCEL|PLANTILLA.*EXCEL/i.test(nom)
+    ) {
+      continue;
+    }
+
     // Validar fecha
     let fechaObj: Date;
     if (m.fecha && m.fecha.includes("T")) {

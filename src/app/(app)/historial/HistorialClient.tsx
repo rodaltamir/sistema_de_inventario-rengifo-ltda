@@ -325,16 +325,22 @@ export default function HistorialClient({
     return "";
   };
 
-  // Formatear ISO (YYYY-MM-DD) a formato visual amigable (DD/MM/YYYY)
-  const formatDateDisplay = (isoStr: string): string => {
-    if (!isoStr) return "";
-    if (isoStr.includes("-")) {
-      const parts = isoStr.split("-");
+  // Formatear ISO (YYYY-MM-DD o Date) a formato visual amigable (DD/MM/YYYY)
+  const formatDateDisplay = (dateVal: any): string => {
+    if (!dateVal) return "";
+    if (dateVal instanceof Date) {
+      const pad = (n: number) => n.toString().padStart(2, "0");
+      return `${pad(dateVal.getUTCDate())}/${pad(dateVal.getUTCMonth() + 1)}/${dateVal.getUTCFullYear()}`;
+    }
+    const str = String(dateVal);
+    const datePart = str.split("T")[0];
+    if (datePart.includes("-")) {
+      const parts = datePart.split("-");
       if (parts.length === 3 && parts[0].length === 4) {
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
       }
     }
-    return isoStr;
+    return str;
   };
 
   const parseNumber = (rawVal: any, fmtVal?: any): number => {
@@ -380,7 +386,7 @@ export default function HistorialClient({
           const rawCellVal = String(row[c] || "").trim();
           const uCellVal = rawCellVal.toUpperCase();
 
-          const codeMatch = uCellVal.match(/^(?:C[OÓ]DIGO|C[OÓ]D)(?:\s*(?:DE|DEL)?\s*PRODUCTO)?\s*[:.-]?\s*(.*)$/i);
+          const codeMatch = uCellVal.match(/^(?:C[OÓ]DIGO\b|C[OÓ]D\b)(?:\s*(?:DE|DEL)?\s*PRODUCTO)?\s*[:.-]?\s*(.*)$/i);
           if (codeMatch) {
             let code = codeMatch[1] ? codeMatch[1].trim() : "";
             if (!code) {
@@ -407,6 +413,14 @@ export default function HistorialClient({
 
             if (code) {
               const codeTrim = String(code).trim();
+              // Ignorar instrucciones, notas o frases largas que no son códigos de producto
+              if (
+                codeTrim.length > 45 ||
+                /^(?:IFICACI[OÓ]N|MODIFICACI[OÓ]N|CODIFICACI[OÓ]N|FORMULARIO|EJEMPLO|PLANTILLA|INSTRUCCI|OBSERVACI|RESUMEN|TOTALES|M[EÉ]TODO|CATEGOR[IÍ]A)/i.test(codeTrim) ||
+                /FORMULARIO|PLANTILLA|INSTRUCCI[OÓ]N/i.test(codeTrim)
+              ) {
+                continue;
+              }
               let prodName = "";
               let marca = "";
               let desc = "";
@@ -974,7 +988,7 @@ export default function HistorialClient({
               const total = tx.detalles.reduce((acc: number, d: any) => acc + d.subtotal, 0) - tx.descuento;
               return (
                 <tr key={tx.id}>
-                  <td>{new Date(tx.fecha).toLocaleDateString()}</td>
+                  <td>{formatDateDisplay(tx.fecha)}</td>
                   <td>
                     {tx.tipoTransaccion === "VENTA" ? (
                       <span className={styles.badgeVenta}>
@@ -1085,7 +1099,7 @@ export default function HistorialClient({
                     Fecha
                   </span>
                   <strong style={{ fontSize: "0.95rem" }}>
-                    {new Date(selectedTx.fecha).toLocaleDateString()}
+                    {formatDateDisplay(selectedTx.fecha)}
                   </strong>
                 </div>
                 {selectedTx.observaciones && (
@@ -1425,7 +1439,7 @@ export default function HistorialClient({
                   <input
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="any"
                     className={styles.editInput}
                     style={{ width: "140px" }}
                     value={editingTx.descuento}

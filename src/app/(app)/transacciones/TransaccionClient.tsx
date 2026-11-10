@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ShoppingCart, Download, FileText, Plus, Trash2, Calculator, Package, X, Upload } from "lucide-react";
 import { procesarTransaccion } from "./actions";
 import { createProducto } from "../productos/actions";
@@ -185,6 +186,7 @@ export default function TransaccionClient({
   tenantData?: any,
   idUser?: string
 }) {
+  const router = useRouter();
   const [productos, setProductos] = useState(initialProductos);
   const [proveedores, setProveedores] = useState(initialProveedores);
 
@@ -219,7 +221,7 @@ export default function TransaccionClient({
             <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; text-transform: uppercase;">Importe Total a Pagar</label>
             <div style="position: relative;">
               <span style="position: absolute; left: 12px; top: 11px; color: #f97316; font-weight: bold;">Bs.</span>
-              <input id="swal-importe-prod" type="number" step="0.01" placeholder="Ej. 1000" style="width: 100%; padding: 12px 12px 12px 40px; box-sizing: border-box; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; color: #1e293b; outline: none; transition: all 0.2s;" onfocus="this.style.borderColor='#f97316'; this.style.boxShadow='0 0 0 3px rgba(249, 115, 22, 0.1)';" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none';">
+              <input id="swal-importe-prod" type="number" step="any" placeholder="Ej. 1000" style="width: 100%; padding: 12px 12px 12px 40px; box-sizing: border-box; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; color: #1e293b; outline: none; transition: all 0.2s;" onfocus="this.style.borderColor='#f97316'; this.style.boxShadow='0 0 0 3px rgba(249, 115, 22, 0.1)';" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none';">
             </div>
           </div>
           <div>
@@ -252,7 +254,7 @@ export default function TransaccionClient({
       const { importe, cantidad } = formValues;
       const intermedio = importe / 0.13;
       const precioUnitario = intermedio / cantidad;
-      const parsedPrecio = parseFloat(precioUnitario.toFixed(5));
+      const parsedPrecio = parseFloat(precioUnitario.toFixed(6));
 
       setProductFormData(prev => ({
         ...prev,
@@ -299,18 +301,35 @@ export default function TransaccionClient({
     setProductLoading(true);
     setProductError("");
     try {
+      const numCosto = Math.round(Number(String(productFormData.costo || 0).replace(',', '.')) * 1e6) / 1e6;
+      const numPrecio = Math.round(Number(String(productFormData.precioVenta || 0).replace(',', '.')) * 1e6) / 1e6;
+      const numStock = parseInt(String(productFormData.stock).replace(',', '.'), 10) || 0;
+
       const newProduct = await createProducto({
         ...productFormData,
-        stock: parseInt(productFormData.stock) || 0,
-        costo: parseFloat(productFormData.costo) || 0,
-        precioVenta: parseFloat(productFormData.precioVenta) || 0,
+        stock: numStock,
+        costo: numCosto,
+        precioVenta: numPrecio,
         fecha: productFechaCreacion,
       });
       setProductos([newProduct, ...productos]);
       setIsProductModalOpen(false);
-      Swal.fire('Éxito', 'Producto creado correctamente', 'success');
+      Swal.fire({
+        icon: 'success',
+        title: '¡Producto Creado!',
+        text: `El producto "${newProduct.codigo} - ${newProduct.nombre}" se creó correctamente.`,
+        timer: 1800,
+        showConfirmButton: false,
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
     } catch (err: any) {
       setProductError(err.message || "Error al crear producto");
+      Swal.fire({
+        icon: 'error',
+        title: 'Error al Crear',
+        text: err.message || "Error al crear producto",
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
     } finally {
       setProductLoading(false);
     }
@@ -456,7 +475,7 @@ export default function TransaccionClient({
             <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; text-transform: uppercase;">Importe Total a Pagar</label>
             <div style="position: relative;">
               <span style="position: absolute; left: 12px; top: 11px; color: #f97316; font-weight: bold;">Bs.</span>
-              <input id="swal-importe" type="number" step="0.01" placeholder="Ej. 1000" style="width: 100%; padding: 12px 12px 12px 40px; box-sizing: border-box; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; color: #1e293b; outline: none; transition: all 0.2s;" onfocus="this.style.borderColor='#f97316'; this.style.boxShadow='0 0 0 3px rgba(249, 115, 22, 0.1)';" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none';">
+              <input id="swal-importe" type="number" step="any" placeholder="Ej. 1000" style="width: 100%; padding: 12px 12px 12px 40px; box-sizing: border-box; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; color: #1e293b; outline: none; transition: all 0.2s;" onfocus="this.style.borderColor='#f97316'; this.style.boxShadow='0 0 0 3px rgba(249, 115, 22, 0.1)';" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none';">
             </div>
           </div>
           
@@ -495,7 +514,7 @@ export default function TransaccionClient({
         // Actualizar la fila correspondiente
         setDetalles(prev => prev.map(d => {
           if (d.id === detalleId) {
-            return { ...d, cantidad: cantidad, precioUnitario: parseFloat(precioUnitario.toFixed(5)) };
+            return { ...d, cantidad: cantidad, precioUnitario: parseFloat(precioUnitario.toFixed(6)) };
         }
         return d;
       }));
@@ -550,13 +569,33 @@ export default function TransaccionClient({
         }))
       });
 
-      await Swal.fire('¡Éxito!', '¡Transacción procesada con éxito! El stock ha sido actualizado.', 'success');
+      router.refresh();
 
       // Preguntar si quiere guardar cliente/proveedor
       await preguntarGuardarContacto();
 
+      const alertRes = await Swal.fire({
+        icon: 'success',
+        title: '¡Transacción Registrada!',
+        html: `
+          <div style="text-align: left; font-size: 0.95rem; color: #334155;">
+            <p>Se registró con éxito la transacción <strong>${nroDocumento}</strong> (${modo}).</p>
+            <p style="margin-top: 6px; color: #16a34a; font-weight: 600;">✓ El stock y kardex han sido actualizados.</p>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonColor: '#2563eb',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Ver en Historial',
+        cancelButtonText: 'Nueva Transacción'
+      });
+
       // Reset form
       resetForm();
+
+      if (alertRes.isConfirmed) {
+        router.push("/historial");
+      }
     } catch (err: any) {
       Swal.fire('Error', err.message || "Error al procesar la transacción.", 'error');
     } finally {
@@ -729,7 +768,7 @@ export default function TransaccionClient({
                         className={styles.formInput}
                         value={d.precioUnitario}
                         onChange={(e) => updateDetalle(d.id, "precioUnitario", e.target.value)}
-                          step="0.00001"
+                        step="any"
                         min="0"
                       />
                       {modo === "COMPRA" && (
@@ -1119,7 +1158,8 @@ export default function TransaccionClient({
                       required
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="any"
+                      placeholder="0.000000"
                       name="costo"
                       style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
                       value={productFormData.costo}
@@ -1153,7 +1193,8 @@ export default function TransaccionClient({
                       required
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="any"
+                      placeholder="0.000000"
                       name="precioVenta"
                       style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
                       value={productFormData.precioVenta}

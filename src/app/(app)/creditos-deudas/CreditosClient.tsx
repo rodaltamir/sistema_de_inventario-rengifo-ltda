@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, ArrowUpRight, ArrowDownRight, Clock, FileText, X } from "lucide-react";
 import { registrarAbono } from "./actions";
+import Swal from "sweetalert2";
 import styles from "./creditos.module.css";
 
 export default function CreditosClient({ deudas }: { deudas: any[] }) {
@@ -60,7 +61,13 @@ export default function CreditosClient({ deudas }: { deudas: any[] }) {
     try {
       await registrarAbono(selectedDeuda.id, monto, obsAbono);
       setIsAbonoModalOpen(false);
-      // Data will refresh via revalidatePath
+      Swal.fire({
+        icon: 'success',
+        title: '¡Abono Registrado!',
+        text: `Se registró el abono de Bs. ${monto.toFixed(2)} correctamente.`,
+        timer: 2000,
+        showConfirmButton: false
+      });
     } catch (err: any) {
       setError(err.message || "Error al registrar el abono");
     } finally {
@@ -202,7 +209,7 @@ export default function CreditosClient({ deudas }: { deudas: any[] }) {
               </div>
               <div className={styles.inputGroup}>
                 <label>Monto a Abonar (Bs.)</label>
-                <input type="number" min="0.01" step="0.01" value={montoAbono} onChange={e => setMontoAbono(e.target.value)} />
+                <input type="number" min="0.000001" step="any" value={montoAbono} onChange={e => setMontoAbono(e.target.value)} />
               </div>
               <div className={styles.inputGroup}>
                 <label>Observaciones / Método</label>

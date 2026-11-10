@@ -54,27 +54,34 @@ export async function createProducto(data: {
     const session = await getServerSession(authOptions);
     const { tenantPrisma } = await getSessionTenantClient(session);
 
+    const cleanCodigo = String(data.codigo || '').trim();
+    if (!cleanCodigo) throw new Error("El código de producto es obligatorio.");
+    if (!data.nombre?.trim()) throw new Error("El nombre de producto es obligatorio.");
+
     // Validate if code exists
     const exists = await tenantPrisma.producto.findUnique({
-      where: { codigo: data.codigo }
+      where: { codigo: cleanCodigo }
     });
 
     if (exists) {
-      throw new Error(`Ya existe un producto con el código "${data.codigo}"`);
+      throw new Error(`Ya existe un producto con el código "${cleanCodigo}"`);
     }
 
     const regDate = data.fecha ? new Date(data.fecha + "T12:00:00") : new Date();
+    const cleanStock = parseInt(String(data.stock)) || 0;
+    const cleanCosto = Math.round(Number(data.costo || 0) * 1e6) / 1e6;
+    const cleanPrecioVenta = Math.round(Number(data.precioVenta || 0) * 1e6) / 1e6;
 
     const newProduct = await tenantPrisma.producto.create({
       data: {
-        codigo: data.codigo,
-        nombre: data.nombre,
+        codigo: cleanCodigo,
+        nombre: data.nombre.trim(),
         descripcion: data.descripcion || "",
         marca: data.marca || "",
         unidadMedida: data.unidadMedida || "Unidad",
-        stock: data.stock || 0,
-        costo: data.costo || 0,
-        precioVenta: data.precioVenta || 0,
+        stock: cleanStock,
+        costo: cleanCosto,
+        precioVenta: cleanPrecioVenta,
         metodoInventario: data.metodoInventario || "Promedio Ponderado",
         proveedorId: data.proveedorId || null,
         categoriaId: data.categoriaId || null,
@@ -82,7 +89,7 @@ export async function createProducto(data: {
       }
     });
 
-    if (data.stock !== 0) {
+    if (cleanStock !== 0) {
       const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
       await tenantPrisma.transaccion.create({
         data: {
@@ -96,10 +103,10 @@ export async function createProducto(data: {
           createdAt: regDate,
           detalles: {
             create: [{
-              productoCodigo: data.codigo,
-              cantidad: data.stock,
-              precioUnitario: data.costo || 0,
-              subtotal: data.stock * (data.costo || 0)
+              productoCodigo: cleanCodigo,
+              cantidad: cleanStock,
+              precioUnitario: cleanCosto,
+              subtotal: Math.round(cleanStock * cleanCosto * 1e6) / 1e6
             }]
           }
         }
@@ -107,6 +114,9 @@ export async function createProducto(data: {
     }
 
     revalidatePath("/productos");
+    revalidatePath("/kardex");
+    revalidatePath("/historial");
+    revalidatePath("/dashboard");
     return newProduct;
   } catch (err: any) {
     console.error("[createProducto Error]:", err);
@@ -119,16 +129,24 @@ export async function updateProducto(codigo: string, data: any) {
     const session = await getServerSession(authOptions);
     const { tenantPrisma } = await getSessionTenantClient(session);
 
+    const cleanCodigo = String(codigo || '').trim();
+    if (!cleanCodigo) throw new Error("Código de producto inválido");
+    if (!data.nombre?.trim()) throw new Error("El nombre de producto es obligatorio.");
+
+    const cleanStock = parseInt(String(data.stock)) || 0;
+    const cleanCosto = Math.round(Number(data.costo || 0) * 1e6) / 1e6;
+    const cleanPrecioVenta = Math.round(Number(data.precioVenta || 0) * 1e6) / 1e6;
+
     const updatedProduct = await tenantPrisma.producto.update({
-      where: { codigo },
+      where: { codigo: cleanCodigo },
       data: {
-        nombre: data.nombre,
+        nombre: data.nombre.trim(),
         descripcion: data.descripcion || "",
         marca: data.marca || "",
         unidadMedida: data.unidadMedida || "Unidad",
-        stock: data.stock || 0,
-        costo: data.costo || 0,
-        precioVenta: data.precioVenta || 0,
+        stock: cleanStock,
+        costo: cleanCosto,
+        precioVenta: cleanPrecioVenta,
         metodoInventario: data.metodoInventario || "Promedio Ponderado",
         proveedorId: data.proveedorId || null,
         categoriaId: data.categoriaId || null,
@@ -136,6 +154,9 @@ export async function updateProducto(codigo: string, data: any) {
     });
 
     revalidatePath("/productos");
+    revalidatePath("/kardex");
+    revalidatePath("/historial");
+    revalidatePath("/dashboard");
     return updatedProduct;
   } catch (err: any) {
     console.error("[updateProducto Error]:", err);
@@ -158,6 +179,9 @@ export async function deleteProducto(codigo: string) {
     });
 
     revalidatePath("/productos");
+    revalidatePath("/kardex");
+    revalidatePath("/historial");
+    revalidatePath("/dashboard");
   } catch (err: any) {
     console.error("[deleteProducto Error]:", err);
     throw new Error(err.message || "Error al eliminar producto");
@@ -169,17 +193,31 @@ export async function importProductos(productos: any[], descripcion?: string, im
     const session = await getServerSession(authOptions);
     const { tenantPrisma } = await getSessionTenantClient(session);
 
-    if (productos.length === 0) {
+    const productosValidos = productos.filter((p: any) => {
+      const cod = (p.codigo || "").trim();
+      const nom = (p.nombre || "").trim();
+      if (!cod && !nom) return false;
+      if (
+        cod.length > 45 ||
+        /^(?:TOTAL|TOTALES|SUBTOTAL|RESUMEN|NOTA|OBSERVACI|METODO|CATEGORIA|FORMULARIO|IFICACION)/i.test(cod) ||
+        /FORMULARIO|PLANTILLA/i.test(cod)
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    if (productosValidos.length === 0) {
       return 0;
     }
 
     const yearDateStart = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
     const yearDateEnd = importDateStr ? new Date(importDateStr + "T12:00:00") : new Date();
 
-    for (const p of productos) {
+    for (const p of productosValidos) {
       const qtyStock = parseInt(p.stock) || 0;
-      const cost = parseFloat(p.costo) || 0;
-      const pVenta = parseFloat(p.precioVenta) || 0;
+      const cost = Math.round(Number(p.costo || 0) * 1e6) / 1e6;
+      const pVenta = Math.round(Number(p.precioVenta || 0) * 1e6) / 1e6;
       
       const exists = await tenantPrisma.producto.findUnique({
         where: { codigo: p.codigo }
@@ -222,7 +260,7 @@ export async function importProductos(productos: any[], descripcion?: string, im
     const desc = descripcion || `Importación Histórica`.trim();
 
     // 1. Transaction for COMPRAS (Entradas)
-    const compras = productos.filter(p => (parseInt(p.entradaCant) || 0) !== 0);
+    const compras = productosValidos.filter(p => (parseInt(p.entradaCant) || 0) !== 0);
     if (compras.length > 0) {
       await tenantPrisma.transaccion.create({
         data: {
@@ -237,12 +275,12 @@ export async function importProductos(productos: any[], descripcion?: string, im
           detalles: {
             create: compras.map(p => {
               const qty = parseInt(p.entradaCant) || 0;
-              const unitCost = parseFloat(p.costo) || 0;
+              const unitCost = Math.round(Number(p.costo || 0) * 1e6) / 1e6;
               return {
                 productoCodigo: p.codigo,
                 cantidad: qty,
                 precioUnitario: unitCost,
-                subtotal: qty * unitCost
+                subtotal: Math.round(qty * unitCost * 1e6) / 1e6
               };
             })
           }
@@ -251,7 +289,7 @@ export async function importProductos(productos: any[], descripcion?: string, im
     }
 
     // 2. Transaction for VENTAS (Salidas)
-    const ventas = productos.filter(p => (parseInt(p.salidaCant) || 0) !== 0);
+    const ventas = productosValidos.filter(p => (parseInt(p.salidaCant) || 0) !== 0);
     if (ventas.length > 0) {
       await tenantPrisma.transaccion.create({
         data: {
@@ -266,12 +304,12 @@ export async function importProductos(productos: any[], descripcion?: string, im
           detalles: {
             create: ventas.map(p => {
               const qty = parseInt(p.salidaCant) || 0;
-              const unitSale = parseFloat(p.precioVenta) || 0;
+              const unitSale = Math.round(Number(p.precioVenta || 0) * 1e6) / 1e6;
               return {
                 productoCodigo: p.codigo,
                 cantidad: qty,
                 precioUnitario: unitSale,
-                subtotal: qty * unitSale
+                subtotal: Math.round(qty * unitSale * 1e6) / 1e6
               };
             })
           }
@@ -280,7 +318,7 @@ export async function importProductos(productos: any[], descripcion?: string, im
     }
 
     // 3. Fallback for products with initial stock but neither entradaCant nor salidaCant
-    const saldosIniciales = productos.filter(p => {
+    const saldosIniciales = productosValidos.filter(p => {
       const ec = parseInt(p.entradaCant) || 0;
       const sc = parseInt(p.salidaCant) || 0;
       const stk = parseInt(p.stock) || 0;
@@ -300,12 +338,12 @@ export async function importProductos(productos: any[], descripcion?: string, im
           detalles: {
             create: saldosIniciales.map(p => {
               const qty = parseInt(p.stock) || 0;
-              const unitCost = parseFloat(p.costo) || 0;
+              const unitCost = Math.round(Number(p.costo || 0) * 1e6) / 1e6;
               return {
                 productoCodigo: p.codigo,
                 cantidad: qty,
                 precioUnitario: unitCost,
-                subtotal: qty * unitCost
+                subtotal: Math.round(qty * unitCost * 1e6) / 1e6
               };
             })
           }
@@ -314,7 +352,10 @@ export async function importProductos(productos: any[], descripcion?: string, im
     }
 
     revalidatePath("/productos");
-    return productos.length;
+    revalidatePath("/kardex");
+    revalidatePath("/historial");
+    revalidatePath("/dashboard");
+    return productosValidos.length;
   } catch (err: any) {
     console.error("[importProductos Error]:", err);
     throw new Error(err.message || "Error al importar productos");

@@ -27,7 +27,10 @@ export default async function HistorialPage() {
       pagos: true,
       deudaCredito: true
     },
-    orderBy: { fecha: 'desc' }
+    orderBy: [
+      { fecha: 'desc' },
+      { createdAt: 'desc' }
+    ]
   });
 
   const productos = await tenantPrisma.producto.findMany({

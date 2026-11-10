@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Plus, Edit, Trash2, X, Package, Download, Upload, Check, Calculator } from "lucide-react";
 import { createProducto, updateProducto, deleteProducto, importProductos, crearCategoriaConProductos } from "./actions";
 import ExcelJS from "exceljs";
@@ -162,16 +162,22 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     precioVenta: "0.00",
   });
 
-  const filtered = productos.filter(p =>
-    p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-    p.codigo.toLowerCase().includes(search.toLowerCase())
-  ).sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }));
+  const filtered = useMemo(() => {
+    const s = search.toLowerCase();
+    return productos.filter(p =>
+      p.nombre.toLowerCase().includes(s) ||
+      p.codigo.toLowerCase().includes(s)
+    ).sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [productos, search]);
 
-  const filteredForCategoria = productos.filter(p =>
-    !p.categoriaId &&
-    (p.nombre.toLowerCase().includes(categoriaSearch.toLowerCase()) ||
-      p.codigo.toLowerCase().includes(categoriaSearch.toLowerCase()))
-  );
+  const filteredForCategoria = useMemo(() => {
+    const s = categoriaSearch.toLowerCase();
+    return productos.filter(p =>
+      !p.categoriaId &&
+      (p.nombre.toLowerCase().includes(s) ||
+        p.codigo.toLowerCase().includes(s))
+    );
+  }, [productos, categoriaSearch]);
 
     const calcularDIMProduct = async () => {
     const costo = parseFloat(formData.costo) || 0;
@@ -218,7 +224,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     if (formValues) {
       const dimMultiplier = 1 + (formValues.dim / 100);
       let calculated = costo * dimMultiplier;
-      calculated = parseFloat(calculated.toFixed(5));
+      calculated = Math.round(calculated * 1e6) / 1e6;
       
       setFormData(prev => ({
         ...prev,
@@ -249,6 +255,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
   const openNewModal = () => {
     setIsEditing(false);
+    setError("");
     setProdPreset("anual");
     setProdAnio(today.getFullYear());
     setFechaCreacion(`${today.getFullYear()}-01-01`);
@@ -270,10 +277,19 @@ export default function ProductosClient({ initialProductos, proveedores, initial
 
   const openEditModal = (p: any) => {
     setIsEditing(true);
+    setError("");
     if (p.createdAt) {
       setFechaCreacion(new Date(p.createdAt).toISOString().split('T')[0]);
       setProdPreset("personalizado");
     }
+
+    const formatUpTo6Decimals = (val: any) => {
+      if (val == null || val === "") return "0.00";
+      const num = typeof val === 'number' ? val : parseFloat(String(val).replace(',', '.'));
+      if (isNaN(num)) return "0.00";
+      return (Math.round(num * 1e6) / 1e6).toString();
+    };
+
     setFormData({
       codigo: p.codigo,
       nombre: p.nombre,
@@ -283,9 +299,9 @@ export default function ProductosClient({ initialProductos, proveedores, initial
       metodoInventario: p.metodoInventario || "Promedio Ponderado",
       proveedorId: p.proveedorId || "",
       categoriaId: p.categoriaId || "",
-      stock: p.stock.toString(),
-      costo: p.costo.toString(),
-      precioVenta: p.precioVenta.toString(),
+      stock: (p.stock != null ? p.stock : 0).toString(),
+      costo: formatUpTo6Decimals(p.costo),
+      precioVenta: formatUpTo6Decimals(p.precioVenta),
     });
     setIsModalOpen(true);
   };
@@ -318,28 +334,131 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     setLoading(true);
     setError("");
 
+    const parseNum = (val: any) => {
+      if (typeof val === 'number') return val;
+      const s = String(val || '0').trim().replace(',', '.');
+      return parseFloat(s);
+    };
+
+    const numCosto = parseNum(formData.costo);
+    const numPrecio = parseNum(formData.precioVenta);
+    const numStock = parseInt(String(formData.stock).trim().replace(',', '.'), 10);
+
+    if (!formData.codigo?.trim()) {
+      const msg = "El código del producto es obligatorio.";
+      setError(msg);
+      Swal.fire({
+        icon: 'warning',
+        title: 'Campo Requerido',
+        text: msg,
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.nombre?.trim()) {
+      const msg = "El nombre del producto es obligatorio.";
+      setError(msg);
+      Swal.fire({
+        icon: 'warning',
+        title: 'Campo Requerido',
+        text: msg,
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (isNaN(numCosto) || numCosto < 0) {
+      const msg = "El costo unitario debe ser un valor numérico válido mayor o igual a 0 (admite hasta 6 decimales).";
+      setError(msg);
+      Swal.fire({
+        icon: 'warning',
+        title: 'Valor Inválido',
+        text: msg,
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (isNaN(numPrecio) || numPrecio < 0) {
+      const msg = "El precio de venta debe ser un valor numérico válido mayor o igual a 0 (admite hasta 6 decimales).";
+      setError(msg);
+      Swal.fire({
+        icon: 'warning',
+        title: 'Valor Inválido',
+        text: msg,
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (isNaN(numStock)) {
+      const msg = "El stock debe ser un número entero válido.";
+      setError(msg);
+      Swal.fire({
+        icon: 'warning',
+        title: 'Valor Inválido',
+        text: msg,
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Redondear a un máximo de 6 decimales
+    const roundedCosto = Math.round(numCosto * 1e6) / 1e6;
+    const roundedPrecio = Math.round(numPrecio * 1e6) / 1e6;
+
     try {
       if (isEditing) {
         const updated = await updateProducto(formData.codigo, {
           ...formData,
-          stock: parseInt(formData.stock),
-          costo: parseFloat(formData.costo),
-          precioVenta: parseFloat(formData.precioVenta),
+          stock: numStock,
+          costo: roundedCosto,
+          precioVenta: roundedPrecio,
         });
-        setProductos(productos.map(p => p.codigo === updated.codigo ? updated : p));
+        setProductos(prev => prev.map(p => p.codigo === updated.codigo ? updated : p));
+        setIsModalOpen(false);
+        Swal.fire({
+          icon: 'success',
+          title: '¡Producto Actualizado!',
+          text: `El producto "${formData.codigo} - ${formData.nombre}" se guardó con éxito.`,
+          timer: 2000,
+          showConfirmButton: false,
+          didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+        });
       } else {
         const newProduct = await createProducto({
-            fecha: fechaCreacion,
+          fecha: fechaCreacion,
           ...formData,
-          stock: parseInt(formData.stock),
-          costo: parseFloat(formData.costo),
-          precioVenta: parseFloat(formData.precioVenta),
+          stock: numStock,
+          costo: roundedCosto,
+          precioVenta: roundedPrecio,
         });
-        setProductos([newProduct, ...productos]);
+        setProductos(prev => [newProduct, ...prev]);
+        setIsModalOpen(false);
+        Swal.fire({
+          icon: 'success',
+          title: '¡Producto Creado!',
+          text: `El producto "${newProduct.codigo} - ${newProduct.nombre}" fue registrado exitosamente.`,
+          timer: 2000,
+          showConfirmButton: false,
+          didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+        });
       }
-      setIsModalOpen(false);
     } catch (err: any) {
-      setError(err.message || "Error al guardar producto");
+      const errorMsg = err.message || "Error al guardar el producto";
+      setError(errorMsg);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error al Guardar',
+        text: errorMsg,
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
     } finally {
       setLoading(false);
     }
@@ -388,8 +507,22 @@ export default function ProductosClient({ initialProductos, proveedores, initial
         // Si la fila está vacía, saltar
         if (rawCodigo == null && rawNombre == null) return;
 
-        const codigo = rawCodigo?.toString() || `PROD-${Date.now()}-${rowNumber}`;
-        const nombre = rawNombre?.toString() || "Sin Nombre";
+        const rawCodStr = rawCodigo != null ? String(rawCodigo).trim() : "";
+        const rawNomStr = rawNombre != null ? String(rawNombre).trim() : "";
+
+        // Ignorar encabezados secundarios, subtotales, totales, notas o instrucciones
+        if (
+          /^(?:TOTAL|TOTALES|SUBTOTAL|RESUMEN|NOTA|NOTAS|OBSERVACI|METODO|MÉTODO|CATEGORIA|CATEGORÍA|PERIODO|CÓDIGO|CODIGO|CÓD|COD)\b/i.test(rawCodStr) ||
+          /^(?:TOTAL|TOTALES|SUBTOTAL|RESUMEN|NOTA|NOTAS|OBSERVACI|METODO|MÉTODO|CATEGORIA|CATEGORÍA|PERIODO)\b/i.test(rawNomStr) ||
+          rawCodStr.length > 45 ||
+          /FORMULARIO|PLANTILLA|INSTRUCCI[OÓ]N/i.test(rawCodStr) ||
+          /FORMULARIO.*EXCEL|PLANTILLA.*EXCEL/i.test(rawNomStr)
+        ) {
+          return;
+        }
+
+        const codigo = rawCodStr || `PROD-${Date.now()}-${rowNumber}`;
+        const nombre = rawNomStr || "Sin Nombre";
         const descripcion = rawDesc?.toString() || "";
         const marca = rawMarca?.toString() || "";
         const unidadMedida = rawUnidad?.toString() || "Unidad";
@@ -444,14 +577,29 @@ export default function ProductosClient({ initialProductos, proveedores, initial
     setIsImporting(true);
     try {
       // El array que mandamos debe coincidir con lo que espera el server action
-      await importProductos(previewData, importDescription, importDate);
+      const count = await importProductos(previewData, importDescription, importDate);
       setIsPreviewModalOpen(false);
       setPreviewData([]);
       setImportDescription("");
+      
+      await Swal.fire({
+        icon: 'success',
+        title: '¡Importación Exitosa!',
+        text: `Se importaron ${count} productos correctamente. Actualizando vista...`,
+        timer: 1600,
+        showConfirmButton: false,
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
+
       // Recargar la página para obtener los datos actualizados desde el servidor
       window.location.reload();
     } catch (err: any) {
-      Swal.fire('Error', err.message || "Error al importar productos", 'error');
+      Swal.fire({
+        icon: 'error',
+        title: 'Error al Importar',
+        text: err.message || "Error al importar productos",
+        didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '999999'; }
+      });
     } finally {
       setIsImporting(false);
     }
@@ -859,7 +1007,8 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                       type="number"
                       name="costo"
                       min="0"
-                      step="0.01"
+                      step="any"
+                      placeholder="0.000000"
                       className={styles.formInput}
                       value={formData.costo}
                       onChange={handleInputChange}
@@ -877,7 +1026,8 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                       type="number"
                       name="precioVenta"
                       min="0"
-                      step="0.01"
+                      step="any"
+                      placeholder="0.000000"
                       className={styles.formInput}
                       value={formData.precioVenta}
                       onChange={handleInputChange}
@@ -1099,7 +1249,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                       <td style={{ padding: '0.25rem' }}>
                         <input
                           type="number"
-                          step="0.01"
+                          step="any"
                           value={row.costo}
                           onChange={(e) => updatePreviewCell(row.id, 'costo', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
@@ -1108,7 +1258,7 @@ export default function ProductosClient({ initialProductos, proveedores, initial
                       <td style={{ padding: '0.25rem' }}>
                         <input
                           type="number"
-                          step="0.01"
+                          step="any"
                           value={row.precioVenta}
                           onChange={(e) => updatePreviewCell(row.id, 'precioVenta', e.target.value)}
                           style={{ width: '100%', padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px' }}

@@ -6,6 +6,8 @@ const extraOrigins = process.env.ALLOWED_ORIGINS
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  compress: true,
+  poweredByHeader: false,
   // Permite acceder a recursos JS desde la red local en desarrollo
   allowedDevOrigins: [
     "localhost",
@@ -16,6 +18,8 @@ const nextConfig: NextConfig = {
     "rengifo_ltda",
     "Rengifo_Ltda",
     "rengifo-ltda",
+    "rengifo.ltda",
+    "*.ltda",
     "*.local",
     "*.lan",
   ],
@@ -38,6 +42,11 @@ const nextConfig: NextConfig = {
         "rengifo-ltda:8080",
         "rengifo-ltda:3000",
         "rengifo-ltda",
+        "rengifo.ltda:8080",
+        "rengifo.ltda:3000",
+        "rengifo.ltda",
+        "*.ltda:8080",
+        "*.ltda",
         "192.168.*.*",
         "192.168.0.24:8080",
         "192.168.0.24:3000",

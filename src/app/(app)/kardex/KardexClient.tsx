@@ -22,10 +22,14 @@ export default function KardexClient({ initialMovimientos, productos, categorias
   // Helper to parse dates safely (handles YYYY-MM-DD or ISO strings without timezone jumps)
   const parseSafeDate = (fechaStr: string | Date | null | undefined): Date | null => {
     if (!fechaStr) return null;
-    if (fechaStr instanceof Date) return isNaN(fechaStr.getTime()) ? null : fechaStr;
+    if (fechaStr instanceof Date) {
+      if (isNaN(fechaStr.getTime())) return null;
+      return new Date(fechaStr.getUTCFullYear(), fechaStr.getUTCMonth(), fechaStr.getUTCDate(), 12, 0, 0);
+    }
     if (typeof fechaStr === 'string') {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(fechaStr)) {
-        const [y, m, d] = fechaStr.split('-').map(Number);
+      const match = fechaStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        const [, y, m, d] = match.map(Number);
         return new Date(y, m - 1, d, 12, 0, 0);
       }
       const d = new Date(fechaStr);
@@ -53,11 +57,11 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     return map;
   }, [productos, movimientos]);
 
-  const initStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const initEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const initStart = new Date(today.getFullYear(), 0, 1);
+  const initEnd = new Date(today.getFullYear(), 11, 31);
 
-  // UI State for Filters
-  const [selectedPreset, setSelectedPreset] = useState("mes");
+  // UI State for Filters (Default to 'anual' to ensure all movements of current year are visible)
+  const [selectedPreset, setSelectedPreset] = useState("anual");
   const [selectedAnio, setSelectedAnio] = useState(today.getFullYear());
   const [selectedMes, setSelectedMes] = useState(today.getMonth());
   const [selectedSemestre, setSelectedSemestre] = useState(today.getMonth() < 6 ? 1 : 2);
@@ -77,7 +81,7 @@ export default function KardexClient({ initialMovimientos, productos, categorias
     movimiento: "TODOS",
     fechaInicio: formatLocal(initStart),
     fechaFin: formatLocal(initEnd),
-    preset: "mes",
+    preset: "anual",
     anio: today.getFullYear()
   });
 
@@ -197,7 +201,14 @@ export default function KardexClient({ initialMovimientos, productos, categorias
       .filter(m => validProductIds.has(m.productoCodigo))
       .filter(m => pFiltro === "TODOS" || m.productoCodigo === pFiltro)
       .filter(m => mFiltro === "TODOS" || m.transaccion.tipoTransaccion === mFiltro)
-      .sort((a, b) => new Date(a.transaccion.fecha).getTime() - new Date(b.transaccion.fecha).getTime());
+      .sort((a, b) => {
+        const da = parseSafeDate(a.transaccion.fecha)?.getTime() || new Date(a.transaccion.fecha).getTime();
+        const db = parseSafeDate(b.transaccion.fecha)?.getTime() || new Date(b.transaccion.fecha).getTime();
+        if (da !== db) return da - db;
+        const ca = new Date(a.transaccion.createdAt || 0).getTime();
+        const cb = new Date(b.transaccion.createdAt || 0).getTime();
+        return ca - cb;
+      });
 
     let saldoInicialFisico = 0;
     let saldoInicialValorado = 0;

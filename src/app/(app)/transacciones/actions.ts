@@ -5,6 +5,12 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
+function parseDateForDb(dateStr?: string): Date {
+  if (!dateStr) return new Date();
+  if (dateStr.includes("T")) return new Date(dateStr);
+  return new Date(dateStr + "T12:00:00");
+}
+
 export async function procesarTransaccion(data: {
   tipoTransaccion: "VENTA" | "COMPRA";
   nroDocumento: string;
@@ -36,6 +42,8 @@ export async function procesarTransaccion(data: {
     const totalDetalles = data.detalles.reduce((acc, curr) => acc + curr.subtotal, 0);
     const totalPagado = totalDetalles - data.descuento;
 
+    const fechaTx = parseDateForDb(data.fecha);
+
     // Use a transaction
     const result = await tenantPrisma.$transaction(async (tx) => {
       // 1. Crear Transaccion
@@ -43,7 +51,7 @@ export async function procesarTransaccion(data: {
         data: {
           tipoTransaccion: data.tipoTransaccion,
           nroDocumento: data.nroDocumento,
-          fecha: new Date(data.fecha),
+          fecha: fechaTx,
           nitCi: data.nitCi,
           razonSocial: data.razonSocial,
           formaPago: data.formaPago,
@@ -88,7 +96,7 @@ export async function procesarTransaccion(data: {
           data: {
             transaccionId: t.id,
             monto: totalPagado,
-            fecha: new Date(data.fecha),
+            fecha: fechaTx,
             observaciones: "Pago completado al contado"
           }
         });
@@ -111,7 +119,7 @@ export async function procesarTransaccion(data: {
             data: {
               transaccionId: t.id,
               monto: abono,
-              fecha: new Date(data.fecha),
+              fecha: fechaTx,
               observaciones: "Pago Inicial al registrar transacción"
             }
           });
